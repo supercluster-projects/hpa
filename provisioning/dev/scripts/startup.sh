@@ -23,8 +23,15 @@
 #   INFISICAL_AUTH_SECRET      Must be set in .env (no default, generate with openssl rand -hex 64)
 #
 # Exit code: 0 on success, non-zero on first failure
+#
+# All stdout/stderr is also captured to startup.log at project root.
 # ---------------------------------------------------------------------------
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
+
+# ---- Log setup: capture all output to startup.log at project root --------
+STARTUP_LOG="${PROJECT_ROOT}/startup.log"
+exec > >(tee -a "${STARTUP_LOG}") 2>&1
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
 
 # ---- Config ---------------------------------------------------------------
 ENVOY_IP=""
