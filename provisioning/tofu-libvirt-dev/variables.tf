@@ -100,11 +100,11 @@ variable "BRIDGE_NAME" {
 variable "TALOS_VERSION" {
   description = "Talos version to install (e.g. v1.9.5)"
   type        = string
-  default     = "v1.9.5"
+  default     = "v1.13.5"
 
   validation {
     condition     = can(regex("^v\\d+\\.\\d+\\.\\d+", var.TALOS_VERSION))
-    error_message = "Talos version must start with 'v' followed by semver (e.g. v1.9.5)."
+    error_message = "Talos version must start with 'v' followed by semver (e.g. v1.13.5)."
   }
 }
 
