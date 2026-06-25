@@ -184,6 +184,10 @@ log "Step 2: Creating Kargo Warehouse 'hpa-warehouse'"
 
 # The Warehouse watches Harbor for new images in the specified project.
 # It requires a valid Harbor URL and project name (configurable via CLI flags).
+# NOTE: Kargo image subscription repoURL must be a bare OCI registry path
+# (e.g. "harbor.harbor.svc.cluster.local/library/hpa-workloads") — the
+# http:// or https:// protocol prefix is stripped from HARBOR_URL if present.
+HARBOR_HOST="${HARBOR_URL#*://}"
 cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
   || log "  (non-fatal) Kargo Warehouse creation will be retried after ArgoCD is ready"
 apiVersion: kargo.akuity.io/v1alpha1
@@ -194,7 +198,7 @@ metadata:
 spec:
   subscriptions:
     - image:
-        repoURL: "${HARBOR_URL}/library/${HARBOR_PROJECT}"
+        repoURL: "${HARBOR_HOST}/library/${HARBOR_PROJECT}"
         imageSelectionStrategy: SemVer
   freightCreationPolicy: Automatic
   stages:

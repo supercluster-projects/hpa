@@ -355,15 +355,15 @@ fi
 # Phase 5: SpinKube CRD availability (spinapp)
 # ============================================================================
 log "Phase 5: SpinKube CRD availability"
-if check_crd "spinapps.core.spinope.dev" "spinapp" PHASE5_STATUS PHASE5_DETAIL; then
+if check_crd "spinapps.core.spinoperator.dev" "spinapp" PHASE5_STATUS PHASE5_DETAIL; then
   : # already set
 else
-  # Try alternative CRD name
+  # Try alternative CRD names (some operator versions use different API groups)
   if check_crd "spinapps.spinoperator.dev" "spinapp (alt)" PHASE5_STATUS PHASE5_DETAIL; then
     : # already set
   else
     PHASE5_STATUS="FAIL"
-    PHASE5_DETAIL="CRD spinapps not found (tried core.spinope.dev and spinoperator.dev)"
+    PHASE5_DETAIL="CRD spinapps not found (tried core.spinoperator.dev and spinoperator.dev)"
     OVERALL_FAILED=1
   fi
 fi
