@@ -77,22 +77,18 @@ log "Cluster reachable."
 NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
 log "Nodes: ${NODE_COUNT}"
 
-# ---- Auto-generate Infisical secrets if not set ---------------------------
-if [ -z "${INFISICAL_ENCRYPTION_KEY:-}" ]; then
-  export INFISICAL_ENCRYPTION_KEY="$(openssl rand -hex 32)"
-  log "INFISICAL_ENCRYPTION_KEY: auto-generated"
-fi
-if [ -z "${INFISICAL_ADMIN_PASSWORD:-}" ]; then
-  export INFISICAL_ADMIN_PASSWORD="$(openssl rand -base64 16)"
-  log "INFISICAL_ADMIN_PASSWORD: auto-generated"
-fi
-if [ -z "${INFISICAL_AUTH_SECRET:-}" ]; then
-  export INFISICAL_AUTH_SECRET="$(openssl rand -hex 64)"
-  log "INFISICAL_AUTH_SECRET: auto-generated"
-fi
-
 # ---- Run pipeline ---------------------------------------------------------
 cd "${SCRIPT_DIR}"
+
+require_env INFISICAL_ENCRYPTION_KEY 2>/dev/null || {
+  log "INFISICAL_ENCRYPTION_KEY not set in .env — install-infisical.sh will fail."
+}
+require_env INFISICAL_ADMIN_PASSWORD 2>/dev/null || {
+  log "INFISICAL_ADMIN_PASSWORD not set in .env — install-infisical.sh will fail."
+}
+require_env INFISICAL_AUTH_SECRET 2>/dev/null || {
+  log "INFISICAL_AUTH_SECRET not set in .env — install-infisical.sh will fail."
+}
 
 step() {
   local num=$1

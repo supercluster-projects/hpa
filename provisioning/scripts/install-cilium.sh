@@ -46,7 +46,7 @@ Deploy Cilium CNI with L2 LoadBalancer configuration on a Talos cluster.
 Options:
   --kubeconfig PATH       Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
   --cilium-version VER    Cilium Helm chart version (default: 1.16.5)
-  --lb-pool-cidr CIDR     LoadBalancer IP pool CIDR (default: 192.168.122.208/28)
+  --lb-pool-cidr CIDR     LoadBalancer IP pool CIDR (set via DEV_LB_POOL_CIDR in .env)
   --cluster-name NAME     Cluster name for Helm values (default: hpa-dev)
   --wait-timeout DUR      Timeout for Helm install and rollout (default: 10m)
   --help, -h              Show this help message

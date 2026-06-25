@@ -7,7 +7,7 @@
 # network using the provided CIDR, gateway, and DHCP range.
 #
 # All paths are relative to the provisioning/scripts/ directory.
-# Usage: ./setup-bridge.sh [--cidr 192.168.122.0/24] [--gateway 192.168.122.1]
+# Usage: ./setup-bridge.sh [--cidr <cidr>] [--gateway <ip>]
 #                          [--bridge hpa-bridge] [--dhcp-start .10] [--dhcp-end .200]
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -26,9 +26,9 @@ fi
 # ---- Internal defaults ----------------------------------------------------
 BRIDGE="${DEV_BRIDGE_NAME}"
 CIDR="${DEV_CIDR_BLOCK}"
-GATEWAY="${DEV_GATEWAY:-192.168.122.1}"
-DHCP_START="${DHCP_START:-.10}"
-DHCP_END="${DHCP_END:-.200}"
+GATEWAY="${CIDR%.*}.1"
+DHCP_START="${DHCP_START:-${CIDR%.*}.10}"
+DHCP_END="${DHCP_END:-${CIDR%.*}.200}"
 
 # ---- Parse CLI overrides --------------------------------------------------
 while [[ $# -gt 0 ]]; do

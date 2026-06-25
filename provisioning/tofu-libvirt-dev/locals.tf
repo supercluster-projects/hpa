@@ -16,6 +16,10 @@ locals {
   # Kubernetes API endpoint on the first control plane node
   cluster_endpoint = "https://${local.cp_ips[0]}:6443"
 
+  # Gateway and DNS derived from DEV_CIDR_BLOCK (first host + first host)
+  gateway     = cidrhost(var.DEV_CIDR_BLOCK, 1)
+  dns_servers = [local.gateway]
+
   # Node type classification: controlplane or worker
   node_types = merge(
     { for name in local.cp_node_names : name => "controlplane" },

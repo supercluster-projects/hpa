@@ -206,7 +206,7 @@ resource "talos_machine_configuration_apply" "node" {
       machine = {
         network = {
           hostname    = each.key
-          nameservers = var.DEV_DNS_SERVERS
+          nameservers = local.dns_servers
           interfaces = [
             {
               interface = "bond0"
@@ -214,7 +214,7 @@ resource "talos_machine_configuration_apply" "node" {
               routes = [
                 {
                   network = "0.0.0.0/0"
-                  gateway = var.DEV_GATEWAY
+                  gateway = local.gateway
                 }
               ]
             }

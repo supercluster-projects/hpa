@@ -61,7 +61,7 @@ Options:
   --ceph-image IMAGE      Ceph container image (default: quay.io/ceph/ceph:v20.2.1)
   --cluster-name NAME     Cluster name for CephCluster CR (default: hpa-dev)
   --wait-timeout DUR      Timeout for Helm install and cluster readiness (default: 10m)
-  --pool-cidr CIDR        Ceph public network CIDR (default: 192.168.122.0/24)
+  --pool-cidr CIDR        Ceph public network CIDR (set via DEV_CIDR_BLOCK in .env)
   --worker-count COUNT    Number of worker nodes expected (default: 3)
   --node-prefix PREFIX    Hostname prefix for worker nodes (default: hpa-node)
   --help, -h              Show this help message
