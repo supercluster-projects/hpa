@@ -426,7 +426,7 @@ provisioning/
 gitops-workloads/
 └── functions/overlays/dev/
     ├── kustomization.yaml
-    ├── welcome-ksvc.yaml        # Welcome Knative Service
+    ├── functions/welcome.yaml         # Welcome Knative Service
     ├── spins/counter.yaml              # Counter SpinApp
     ├── infisical-secret.yaml    # Infisical-managed secrets
     └── ...
