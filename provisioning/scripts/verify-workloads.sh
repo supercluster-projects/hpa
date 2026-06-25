@@ -28,6 +28,20 @@
 
 # ---- Defaults -------------------------------------------------------------
 
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env DEV_GATEWAY_NAMESPACE
+require_env DEV_GATEWAY_NAME
+require_env DEV_HTTPROUTE_NAME
+require_env DEV_WORKLOADS_NAMESPACE
+
+# ---- Internal defaults (script-internal only) -------------------------
+ENVOY_IP="${DEV_ENVOY_IP:-}"
+GATEWAY_NAMESPACE="${DEV_GATEWAY_NAMESPACE}"
+GATEWAY_NAME="${DEV_GATEWAY_NAME}"
+HTTPROUTE_NAME="${DEV_HTTPROUTE_NAME}"
+WORKLOADS_NAMESPACE="${DEV_WORKLOADS_NAMESPACE}"
+KEYDB_NAMESPACE="keydb"
+
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in

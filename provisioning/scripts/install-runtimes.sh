@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-runtimes.sh — Deploy Knative Serving + cert-manager + SpinKube
 #                       + KeyDB on a Kubernetes cluster
 #
@@ -23,8 +22,28 @@
 #                              [--namespace-prefix <prefix>]
 #                              [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env CERT_MANAGER_VERSION
+require_env KNATIVE_VERSION
+require_env SPIN_OPERATOR_VERSION
+require_env KEYDB_VERSION
+require_env DEV_STORAGE_CLASS
+
+# ---- Internal defaults (script-internal only) -------------------------
+STORAGE_CLASS="${DEV_STORAGE_CLASS}"
+KEYDB_IMAGE="eqalpha/keydb:${KEYDB_VERSION}"
+WAIT_TIMEOUT=600
+CERT_MANAGER_NAMESPACE="cert-manager"
+KNATIVE_NAMESPACE="knative-serving"
+KOURIER_NAMESPACE="kourier-system"
+SPIN_OPERATOR_NAMESPACE="spin-operator"
+KEYDB_NAMESPACE="keydb"
+KNATIVE_BASE_URL="https://github.com/knative/serving/releases/download/${KNATIVE_VERSION}"
+KOURIER_URL="https://github.com/knative/net-kourier/releases/download/${KNATIVE_VERSION}/kourier.yaml"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

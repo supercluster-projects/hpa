@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-workloads.sh — Deploy welcome Knative Service + counter SpinApp
 #
 # Deploys the hello-world application workloads on a Kubernetes cluster:
@@ -29,8 +28,24 @@
 #                               [--wait-timeout <duration>]
 #                               [--help]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env DEV_WORKLOADS_NAMESPACE
+require_env DEV_GATEWAY_NAMESPACE
+require_env DEV_GATEWAY_NAME
+require_env DEV_HTTPROUTE_NAME
+require_env DEV_GITOPS_OVERLAY_PATH
+
+# ---- Internal defaults (script-internal only) -------------------------
+WORKLOADS_NAMESPACE="${DEV_WORKLOADS_NAMESPACE}"
+GATEWAY_NAMESPACE="${DEV_GATEWAY_NAMESPACE}"
+GATEWAY_NAME="${DEV_GATEWAY_NAME}"
+HTTPROUTE_NAME="${DEV_HTTPROUTE_NAME}"
+GITOPS_OVERLAY_PATH="${DEV_GITOPS_OVERLAY_PATH}"
+WAIT_TIMEOUT=600
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

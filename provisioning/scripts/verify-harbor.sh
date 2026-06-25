@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-harbor.sh -- Harbor registry health verification
 #
 # Verifies Harbor pod health, LoadBalancer Ingress IP assignment, registry
@@ -16,8 +15,15 @@
 # Usage: ./verify-harbor.sh [--kubeconfig <path>] [--namespace <ns>]
 #                           [--expected-pods <count>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+
+# ---- Internal defaults (script-internal only) -------------------------
+NAMESPACE="harbor"
+EXPECTED_PODS=8
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

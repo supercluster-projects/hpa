@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-gateway.sh — Deploy Envoy Gateway + Headlamp + HTTPRoutes on K8s
 #
 # Installs:
@@ -25,8 +24,19 @@
 #                             [--domain <domain>]
 #                             [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env ENVOY_VERSION
+require_env HEADLAMP_VERSION
+require_env DEV_GATEWAY_NAME
+
+# ---- Internal defaults (script-internal only) -------------------------
+GATEWAY_NAME="${DEV_GATEWAY_NAME}"
+WAIT_TIMEOUT=600
+GATEWAY_NAMESPACE="envoy-gateway-system"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

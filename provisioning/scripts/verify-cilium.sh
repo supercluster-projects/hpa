@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-cilium.sh — Cilium CNI health verification
 #
 # Verifies Cilium agent pod health, agent count, CiliumLoadBalancerIPPool CRD
@@ -13,8 +12,14 @@
 #
 # Usage: ./verify-cilium.sh [--kubeconfig <path>] [--expected-nodes <count>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+
+# ---- Internal defaults (script-internal only) -------------------------
+EXPECTED_NODES=4
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

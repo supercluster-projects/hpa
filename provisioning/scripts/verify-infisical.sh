@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-infisical.sh -- Infisical + Secrets Operator health verification
 #
 # Verifies Infisical backend pod health, service LoadBalancer IP assignment,
@@ -16,8 +15,15 @@
 # Usage: ./verify-infisical.sh [--kubeconfig <path>]
 #                              [--namespace <ns>] [--secrets-op-ns <ns>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+
+# ---- Internal defaults (script-internal only) -------------------------
+NAMESPACE="infisical"
+SECRETS_OP_NAMESPACE="infisical-secrets-operator"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

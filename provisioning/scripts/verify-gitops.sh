@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-gitops.sh — Kargo + ArgoCD + Warehouse + Application verification
 #
 # Verifies the GitOps delivery pipeline that S06 workloads depend on:
@@ -26,8 +25,19 @@
 #           [--expected-kargo-pods <count>] [--expected-argocd-pods <count>]
 #           [--help]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env DEV_HARBOR_URL
+
+# ---- Internal defaults (script-internal only) -------------------------
+HARBOR_URL="${DEV_HARBOR_URL}"
+APPLICATION_NAME="hpa-workloads"
+WAREHOUSE_NAME="hpa-warehouse"
+EXPECTED_KARGO_PODS=2
+EXPECTED_ARGOCD_PODS=3
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

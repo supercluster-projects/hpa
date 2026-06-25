@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-runtimes.sh — Core runtime health verification
 #
 # Verifies all core runtimes that downstream components depend on:
@@ -21,6 +20,7 @@
 #           [--expected-runtime-pods cert-manager:3,knative-serving:2,...]
 #           [--wait-timeout <seconds>] [--help]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 
@@ -37,6 +37,16 @@ parse_expected_pods() {
     fi
   done
 }
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+
+# ---- Internal defaults (script-internal only) -------------------------
+WAIT_TIMEOUT=120
+EXPECTED_CERT_MGR=3
+EXPECTED_KNATIVE=5
+SPIN_NS="spin-operator"
+EXPECTED_SPIN=1
+EXPECTED_KEYDB=1
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

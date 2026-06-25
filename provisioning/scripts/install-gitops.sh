@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-gitops.sh — Deploy Kargo + ArgoCD GitOps pipeline on K8s
 #
 # Installs the GitOps delivery pipeline that watches Harbor for new images
@@ -29,8 +28,26 @@
 #                            [--namespace-prefix <prefix>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env KARGO_VERSION
+require_env ARGOCD_VERSION
+require_env GITOPS_REPO_URL
+require_env DEV_HARBOR_URL
+require_env DEV_HARBOR_PROJECT
+require_env DEV_GITOPS_REVISION
+
+# ---- Internal defaults (script-internal only) -------------------------
+KARGO_NAMESPACE="kargo"
+ARGOCD_NAMESPACE="argocd"
+WAIT_TIMEOUT=600
+HARBOR_URL="${DEV_HARBOR_URL}"
+HARBOR_PROJECT="${DEV_HARBOR_PROJECT}"
+GITOPS_REVISION="${DEV_GITOPS_REVISION}"
+HARBOR_HOST="${HARBOR_URL#*://}"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

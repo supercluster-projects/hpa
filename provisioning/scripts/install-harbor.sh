@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-harbor.sh — Deploy Harbor OCI image registry on a Kubernetes cluster
 #
 # Installs Harbor via Helm with ceph-rbd PVCs for all persistence and a
@@ -15,8 +14,20 @@
 #                            [--storage-class <name>] [--namespace <ns>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env HARBOR_VERSION
+require_env HARBOR_ADMIN_PASSWORD
+require_env DEV_STORAGE_CLASS
+
+# ---- Internal defaults (script-internal only) -------------------------
+NAMESPACE="harbor"
+WAIT_TIMEOUT=600
+HELM_RELEASE_NAME="harbor"
+STORAGE_CLASS="${DEV_STORAGE_CLASS}"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

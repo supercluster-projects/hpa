@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-rook-ceph.sh — Deploy Rook Ceph operator with CephCluster CR and
 #                         ceph-rbd StorageClass
 #
@@ -17,8 +16,27 @@
 #                               [--wait-timeout <duration>] [--pool-cidr <cidr>]
 #                               [--worker-count <count>] [--node-prefix <prefix>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env ROOK_VERSION
+require_env CEPH_IMAGE
+require_env DEV_CIDR_BLOCK
+require_env DEV_CLUSTER_NAME
+require_env DEV_NODE_PREFIX
+require_env DEV_WORKER_COUNT
+
+# ---- Internal defaults (script-internal only) -------------------------
+CLUSTER_NAME="${DEV_CLUSTER_NAME}"
+NODE_PREFIX="${DEV_NODE_PREFIX}"
+WORKER_COUNT="${DEV_WORKER_COUNT}"
+POOL_CIDR="${DEV_CIDR_BLOCK}"
+WAIT_TIMEOUT=600
+HELM_RELEASE_NAME="rook-ceph"
+HELM_NAMESPACE="rook-ceph"
+CEPH_IMAGE="${CEPH_IMAGE}"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

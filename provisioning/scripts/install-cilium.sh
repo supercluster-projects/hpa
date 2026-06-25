@@ -17,6 +17,18 @@
 
 # ---- Defaults -------------------------------------------------------------
 
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env CILIUM_VERSION
+require_env DEV_LB_POOL_CIDR
+require_env DEV_CLUSTER_NAME
+
+# ---- Internal defaults (script-internal only) -------------------------
+CLUSTER_NAME="${DEV_CLUSTER_NAME}"
+LB_POOL_CIDR="${DEV_LB_POOL_CIDR}"
+WAIT_TIMEOUT=300
+HELM_RELEASE_NAME="cilium"
+HELM_NAMESPACE="kube-system"
+
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in

@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # verify-cluster.sh — Talos cluster health verification
-#
 # Runs talosctl health check and kubectl node inspection.
 # Exits non-zero if fewer than 4 nodes are Ready or if health check fails.
 #
@@ -12,6 +11,7 @@
 # to stderr; the final node summary table goes to stdout.
 
 
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # --- Paths ---
 TALOSCONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/talosconfig"
 EXPECTED_NODES=4

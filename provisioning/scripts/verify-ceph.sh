@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-ceph.sh -- Rook Ceph health verification
 #
 # Verifies Rook Ceph operator pod health, CephCluster CR status (phase,
@@ -15,8 +14,16 @@
 # Usage: ./verify-ceph.sh [--kubeconfig <path>] [--expected-osds <count>]
 #                         [--expected-mons <count>] [--namespace <ns>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+
+# ---- Internal defaults (script-internal only) -------------------------
+EXPECTED_OSDS=3
+EXPECTED_MONS=3
+NAMESPACE="rook-ceph"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

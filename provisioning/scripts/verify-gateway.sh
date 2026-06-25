@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-gateway.sh — Envoy Gateway + Headlamp + route verification
 #
 # Verifies the ingress gateway stack that workloads depend on:
@@ -24,8 +23,16 @@
 #           [--expected-envoy-pods <count>]
 #           [--help]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env DEV_GATEWAY_NAME
+
+# ---- Internal defaults (script-internal only) -------------------------
+GATEWAY_NAME="${DEV_GATEWAY_NAME}"
+GATEWAY_NAMESPACE="envoy-gateway-system"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

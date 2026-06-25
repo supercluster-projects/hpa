@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-infisical.sh — Deploy Infisical secrets management platform with
 #                         Infisical Secrets Operator on a Kubernetes cluster
 #
@@ -21,8 +20,21 @@
 # Usage: ./install-infisical.sh [--kubeconfig <path>] [--infisical-version <ver>]
 #                               [--namespace <ns>] [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
+
+# ---- Required environment variables (fail fast if missing from .env) ---
+require_env INFISICAL_VERSION
+require_env INFISICAL_ENCRYPTION_KEY
+require_env INFISICAL_ADMIN_PASSWORD
+require_env INFISICAL_AUTH_SECRET
+
+# ---- Internal defaults (script-internal only) -------------------------
+NAMESPACE="infisical"
+SECRETS_OP_NAMESPACE="infisical-secrets-operator"
+WAIT_TIMEOUT=600
+HELM_RELEASE_NAME="infisical"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

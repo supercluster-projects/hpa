@@ -12,11 +12,21 @@
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
-# ---- Defaults (matching provisioning variables) ---------------------------
-# Reads DEV_* vars first (from .env), falls back to unprefixed vars, then defaults.
-BRIDGE="${DEV_BRIDGE_NAME:-${BRIDGE_NAME:-hpa-bridge}}"
-CIDR="${DEV_CIDR_BLOCK:-${CIDR_BLOCK:-192.168.122.0/24}}"
-GATEWAY="${DEV_GATEWAY:-${GATEWAY:-192.168.122.1}}"
+# Source .env directly (no preamble since this runs before cluster exists).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="$(cd "${SCRIPT_DIR}/../.." && pwd)/.env"
+if [ -f "${ENV_FILE}" ]; then
+  set -a; source "${ENV_FILE}"; set +a
+fi
+
+# ---- Required environment variables ---------------------------------------
+: "${DEV_BRIDGE_NAME:?Required env var DEV_BRIDGE_NAME not set (see .env.example)}"
+: "${DEV_CIDR_BLOCK:?Required env var DEV_CIDR_BLOCK not set (see .env.example)}"
+
+# ---- Internal defaults ----------------------------------------------------
+BRIDGE="${DEV_BRIDGE_NAME}"
+CIDR="${DEV_CIDR_BLOCK}"
+GATEWAY="${DEV_GATEWAY:-192.168.122.1}"
 DHCP_START="${DHCP_START:-.10}"
 DHCP_END="${DHCP_END:-.200}"
 
