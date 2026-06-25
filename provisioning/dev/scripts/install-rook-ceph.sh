@@ -56,7 +56,7 @@ Usage: $(basename "$0") [options]
 Deploy Rook Ceph operator with CephCluster and ceph-rbd StorageClass.
 
 Options:
-  --kubeconfig PATH       Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH       Path to kubeconfig (default: ../opentofu/kubeconfig)
   --rook-version VER      Rook operator Helm chart version (default: v1.16.4)
   --ceph-image IMAGE      Ceph container image (default: quay.io/ceph/ceph:v20.2.1)
   --cluster-name NAME     Cluster name for CephCluster CR (default: hpa-dev)

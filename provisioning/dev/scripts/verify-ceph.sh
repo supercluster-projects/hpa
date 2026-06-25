@@ -40,7 +40,7 @@ Verify Rook Ceph operator health, CephCluster status, OSD/MON counts,
 CephBlockPool, and StorageClass.
 
 Options:
-  --kubeconfig PATH     Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH     Path to kubeconfig (default: ../opentofu/kubeconfig)
   --expected-osds NUM   Expected number of OSDs (default: 3)
   --expected-mons NUM   Expected number of MONs (default: 3)
   --namespace NS        Rook Ceph namespace (default: rook-ceph)

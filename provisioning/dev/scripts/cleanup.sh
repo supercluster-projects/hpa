@@ -9,7 +9,7 @@
 # undefines the hpa-bridge network, and cleans up kubeconfig/talosconfig
 # from the provisioning/dev directory.
 #
-# All paths relative to provisioning/scripts/.
+# All paths relative to provisioning/dev/scripts/.
 # Usage: ./cleanup.sh [--prefix hpa-node] [--bridge hpa-bridge]
 # ---------------------------------------------------------------------------
 set -euo pipefail
@@ -17,7 +17,7 @@ set -euo pipefail
 # ---- Defaults (matching provisioning variables) ---------------------------
 NODE_PREFIX="${NODE_PREFIX:-hpa-node}"
 BRIDGE="${BRIDGE_NAME:-hpa-bridge}"
-TOFU_DIR="${TOFU_DIR:-../dev}"
+TOFU_DIR="${TOFU_DIR:-../opentofu}"
 
 # ---- Parse CLI overrides --------------------------------------------------
 while [[ $# -gt 0 ]]; do

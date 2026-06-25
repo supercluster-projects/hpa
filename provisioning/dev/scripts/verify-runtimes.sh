@@ -70,7 +70,7 @@ Phases:
   7  KeyDB PVC binding status
 
 Options:
-  --kubeconfig PATH               Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH               Path to kubeconfig (default: ../opentofu/kubeconfig)
   --expected-runtime-pods LIST    Comma-separated namespace:count pairs
                                     (default: cert-manager:3,knative-serving:2,
                                               spin-operator:1,keydb:2)

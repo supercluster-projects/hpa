@@ -6,7 +6,7 @@
 # does, exits 0 immediately (idempotent). Otherwise, defines and starts the
 # network using the provided CIDR, gateway, and DHCP range.
 #
-# All paths are relative to the provisioning/scripts/ directory.
+# All paths are relative to the provisioning/dev/scripts/ directory.
 # Usage: ./setup-bridge.sh [--cidr <cidr>] [--gateway <ip>]
 #                          [--bridge hpa-bridge] [--dhcp-start .10] [--dhcp-end .200]
 # ---------------------------------------------------------------------------

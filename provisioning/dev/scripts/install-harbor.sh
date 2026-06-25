@@ -46,7 +46,7 @@ Deploy Harbor OCI image registry on a Kubernetes cluster with ceph-rbd
 persistent storage and LoadBalancer exposure via Cilium L2.
 
 Options:
-  --kubeconfig PATH       Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH       Path to kubeconfig (default: ../opentofu/kubeconfig)
   --harbor-version VER    Harbor Helm chart version (default: 2.12.2)
   --storage-class NAME    StorageClass for PVCs (default: ceph-rbd)
   --namespace NS          Kubernetes namespace (default: harbor)

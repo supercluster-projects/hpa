@@ -62,7 +62,7 @@ Components installed:
   - Headlamp            Kubernetes web UI dashboard
 
 Options:
-  --kubeconfig PATH         Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH         Path to kubeconfig (default: ../opentofu/kubeconfig)
   --envoy-version VER       Envoy Gateway Helm chart version (default: v1.2.2)
   --headlamp-version VER    Headlamp Helm chart version (default: 0.16.0)
   --gateway-name NAME       Gateway resource name (default: hpa-dev-gateway)

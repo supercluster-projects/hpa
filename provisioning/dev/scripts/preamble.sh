@@ -3,7 +3,7 @@
 #   . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 #
 # Provides:
-#   SCRIPT_DIR         — absolute path to provisioning/scripts/
+#   SCRIPT_DIR         — absolute path to provisioning/dev/scripts/
 #   PROJECT_ROOT       — absolute path to the worktree/project root
 #   KUBECONFIG         — default kubeconfig path (overridable via env or --kubeconfig)
 #   log()              — timestamped stderr logging
@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-KUBECONFIG="${KUBECONFIG:-${SCRIPT_DIR}/../dev/kubeconfig}"
+KUBECONFIG="${KUBECONFIG:-${SCRIPT_DIR}/../opentofu/kubeconfig}"
 START_TIME=$(date +%s)
 
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }

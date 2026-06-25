@@ -33,7 +33,7 @@ Usage: $(basename "$0") [options]
 Verify Cilium CNI health, CRD state, and agent readiness.
 
 Options:
-  --kubeconfig PATH        Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH        Path to kubeconfig (default: ../opentofu/kubeconfig)
   --expected-nodes COUNT   Expected number of Cilium agent pods (default: 4)
   --help, -h               Show this help message
 HELP

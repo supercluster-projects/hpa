@@ -2,7 +2,7 @@
 
 This guide walks through the complete bootstrap of a 4-node Talos Kubernetes
 dev cluster on KVM/libvirt. Every step is backed by a provisioning script in
-`provisioning/scripts/`.
+`provisioning/dev/scripts/`.
 
 **Total time:** ~60-90 minutes (most of that waiting for Ceph OSDs to claim)
 
@@ -67,7 +67,7 @@ done
 ## Step 1: Provision the OpenTofu infrastructure (Talos VMs)
 
 ```bash
-cd provisioning/dev
+cd provisioning/dev/opentofu
 
 # Initialize providers
 tofu init
@@ -81,13 +81,13 @@ tofu apply -auto-approve
 #   - 4 libvirt VMs (20 GB OS disk each)
 #   - 3 additional 20 GB Ceph disks (workers only)
 #   - hpa-bridge libvirt network (if it doesn't exist)
-#   - kubeconfig and talosconfig in provisioning/dev/
+#   - kubeconfig and talosconfig in provisioning/dev/opentofu/
 ```
 
 **Verify:**
 ```bash
 talosctl cluster status
-KUBECONFIG=provisioning/dev/kubeconfig kubectl get nodes
+KUBECONFIG=provisioning/dev/opentofu/kubeconfig kubectl get nodes
 # Expected: 4 nodes, all Ready
 ```
 
@@ -96,7 +96,7 @@ KUBECONFIG=provisioning/dev/kubeconfig kubectl get nodes
 ## Step 2: Set up hpa-bridge network (if not auto-created)
 
 ```bash
-cd provisioning/scripts
+cd provisioning/dev/scripts
 ./setup-bridge.sh
 # Expected: "Network 'hpa-bridge' is active and ready" or "already exists"
 ```
@@ -269,7 +269,7 @@ npx playwright test
 ## Step 11: Idempotent Re-apply (test cleanup + re-bootstrap)
 
 ```bash
-cd provisioning/scripts
+cd provisioning/dev/scripts
 
 # Cleanup
 ./cleanup.sh
@@ -288,7 +288,7 @@ tofu apply -auto-approve
 ## Step 12: Tear Down
 
 ```bash
-cd provisioning/scripts
+cd provisioning/dev/scripts
 ./cleanup.sh
 # Expected: All VMs destroyed, volumes deleted, network removed, configs cleaned
 ```
@@ -397,32 +397,33 @@ cd provisioning/scripts
 
 ```
 provisioning/
-├── scripts/
-│   ├── setup-bridge.sh          # Create hpa-bridge libvirt network
-│   ├── cleanup.sh               # Destroy everything (VMs, volumes, network)
-│   ├── install-cilium.sh        # Cilium CNI + LB pool
-│   ├── install-rook-ceph.sh     # Rook Ceph operator + CephCluster
-│   ├── install-harbor.sh        # Harbor registry
-│   ├── install-infisical.sh     # Infisical + Secrets Operator
-│   ├── install-runtimes.sh      # cert-manager, Knative, SpinKube, KeyDB
-│   ├── install-gateway.sh       # Envoy Gateway + Headlamp + HTTPRoutes
-│   ├── install-gitops.sh        # Kargo + ArgoCD + Warehouse + Application
-│   ├── install-workloads.sh     # Welcome ksvc + counter SpinApp
-│   ├── verify-manifests.sh      # Static manifest validation (no cluster)
-│   ├── verify-cluster.sh        # Cluster health
-│   ├── verify-cilium.sh         # Cilium health
-│   ├── verify-ceph.sh           # Ceph health
-│   ├── verify-harbor.sh         # Harbor health
-│   ├── verify-infisical.sh      # Infisical health
-│   ├── verify-runtimes.sh       # Runtimes health
-│   ├── verify-gateway.sh        # Gateway health
-│   ├── verify-gitops.sh         # GitOps health
-│   └── verify-workloads.sh      # Workloads health
 ├── dev/
-│   ├── main.tf                  # OpenTofu module: VMs, disks, network
-│   ├── variables.tf             # VM configuration variables
-│   ├── outputs.tf               # kubeconfig, talosconfig, IPs
-│   └── ...
+│   ├── opentofu/
+│   │   ├── main.tf                  # OpenTofu module: VMs, disks, network
+│   │   ├── variables.tf             # VM configuration variables
+│   │   ├── outputs.tf               # kubeconfig, talosconfig, IPs
+│   │   └── ...
+│   └── scripts/
+│       ├── setup-bridge.sh          # Create hpa-bridge libvirt network
+│       ├── cleanup.sh               # Destroy everything (VMs, volumes, network)
+│       ├── install-cilium.sh        # Cilium CNI + LB pool
+│       ├── install-rook-ceph.sh     # Rook Ceph operator + CephCluster
+│       ├── install-harbor.sh        # Harbor registry
+│       ├── install-infisical.sh     # Infisical + Secrets Operator
+│       ├── install-runtimes.sh      # cert-manager, Knative, SpinKube, KeyDB
+│       ├── install-gateway.sh       # Envoy Gateway + Headlamp + HTTPRoutes
+│       ├── install-gitops.sh        # Kargo + ArgoCD + Warehouse + Application
+│       ├── install-workloads.sh     # Welcome ksvc + counter SpinApp
+│       ├── verify-manifests.sh      # Static manifest validation (no cluster)
+│       ├── verify-cluster.sh        # Cluster health
+│       ├── verify-cilium.sh         # Cilium health
+│       ├── verify-ceph.sh           # Ceph health
+│       ├── verify-harbor.sh         # Harbor health
+│       ├── verify-infisical.sh      # Infisical health
+│       ├── verify-runtimes.sh       # Runtimes health
+│       ├── verify-gateway.sh        # Gateway health
+│       ├── verify-gitops.sh         # GitOps health
+│       └── verify-workloads.sh      # Workloads health
 gitops-workloads/
 └── functions/overlays/dev/
     ├── kustomization.yaml

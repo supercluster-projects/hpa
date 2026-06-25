@@ -13,7 +13,7 @@
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # --- Paths ---
-TALOSCONFIG="${SCRIPT_DIR}/../dev/talosconfig"
+TALOSCONFIG="${SCRIPT_DIR}/../opentofu/talosconfig"
 EXPECTED_NODES=4
 
 # --- CLI Overrides ---

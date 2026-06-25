@@ -44,7 +44,7 @@ Usage: $(basename "$0") [options]
 Deploy Cilium CNI with L2 LoadBalancer configuration on a Talos cluster.
 
 Options:
-  --kubeconfig PATH       Path to kubeconfig (default: ../dev/kubeconfig)
+  --kubeconfig PATH       Path to kubeconfig (default: ../opentofu/kubeconfig)
   --cilium-version VER    Cilium Helm chart version (default: 1.16.5)
   --lb-pool-cidr CIDR     LoadBalancer IP pool CIDR (set via DEV_LB_POOL_CIDR in .env)
   --cluster-name NAME     Cluster name for Helm values (default: hpa-dev)
