@@ -30,7 +30,8 @@ KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
 CERT_MANAGER_VERSION="v1.17.1"
 KNATIVE_VERSION="v1.16.0"
 SPIN_OPERATOR_VERSION="v0.13.0"
-KEYDB_IMAGE="eqalpha/keydb:x86_64_v6.3.3"
+KEYDB_VERSION="x86_64_v6.3.3"
+KEYDB_IMAGE="eqalpha/keydb:${KEYDB_VERSION}"
 STORAGE_CLASS="ceph-rbd"
 NAMESPACE_PREFIX=""
 WAIT_TIMEOUT="10m"
@@ -55,6 +56,7 @@ while [[ $# -gt 0 ]]; do
     --knative-version)        KNATIVE_VERSION="$2";          shift 2 ;;
     --spin-operator-version)  SPIN_OPERATOR_VERSION="$2";    shift 2 ;;
     --keydb-image)            KEYDB_IMAGE="$2";              shift 2 ;;
+    --keydb-version)          KEYDB_VERSION="$2"; KEYDB_IMAGE="eqalpha/keydb:${KEYDB_VERSION}"; shift 2 ;;
     --storage-class)          STORAGE_CLASS="$2";            shift 2 ;;
     --namespace-prefix)       NAMESPACE_PREFIX="$2";         shift 2 ;;
     --wait-timeout)           WAIT_TIMEOUT="$2";             shift 2 ;;
@@ -76,6 +78,7 @@ Options:
   --knative-version VER          Knative Serving version (default: v1.16.0)
   --spin-operator-version VER    Spin operator Helm chart version (default: v0.13.0)
   --keydb-image IMAGE            KeyDB container image (default: eqalpha/keydb:x86_64_v6.3.3)
+  --keydb-version VER          KeyDB image tag version (default: x86_64_v6.3.3)
   --storage-class NAME           StorageClass for KeyDB PVC (default: ceph-rbd)
   --namespace-prefix PREFIX      Prefix for all component namespaces
   --wait-timeout DUR             Timeout for Helm install and rollouts (default: 10m)
@@ -96,6 +99,7 @@ log "  cert-manager-version:   ${CERT_MANAGER_VERSION}"
 log "  knative-version:        ${KNATIVE_VERSION}"
 log "  spin-operator-version:  ${SPIN_OPERATOR_VERSION}"
 log "  keydb-image:            ${KEYDB_IMAGE}"
+log "  keydb-version:          ${KEYDB_VERSION}"
 log "  storage-class:          ${STORAGE_CLASS}"
 log "  namespace-prefix:       ${NAMESPACE_PREFIX:-<none>}"
 log "  wait-timeout:           ${WAIT_TIMEOUT}"
