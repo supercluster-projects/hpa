@@ -115,9 +115,9 @@ resource "libvirt_volume" "ceph_disk" {
 # Step 5: Libvirt domains (VMs)
 # ---------------------------------------------------------------------------
 # Each VM gets:
-#   - OS disk on /dev/vda (virtio bus, qcow2)
+#   - OS disk on /dev/vda (virtio bus, qcow2 from Talos metal image)
 #   - Workers also get a ceph disk on /dev/vdb (virtio bus, raw)
-#   - Two virtio network interfaces (eth0, eth1) on hpa-bridge for bonding
+#   - One virtio network interface on hpa-bridge (static DHCP lease)
 resource "libvirt_domain" "node" {
   for_each = local.node_apply
 
@@ -133,6 +133,7 @@ resource "libvirt_domain" "node" {
     type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
+    firmware     = "efi"
     boot_devices = [{ dev = "hd" }]
   }
 
