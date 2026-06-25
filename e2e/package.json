@@ -1,0 +1,14 @@
+{
+  "name": "hpa-e2e-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Playwright e2e tests for HPA workloads",
+  "scripts": {
+    "test": "playwright test",
+    "test:dry-run": "playwright test --dry-run",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}
