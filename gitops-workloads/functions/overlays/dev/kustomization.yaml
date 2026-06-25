@@ -5,5 +5,5 @@ namespace: hpa-workloads
 
 resources:
   - welcome-ksvc.yaml
-  - counter-spinapp.yaml
+  - ../../../../backend/spins/counter
   - infisical-secret.yaml

@@ -11,9 +11,9 @@
 #   6. Patch welcome-route HTTPRoute backendRef from placeholder to actual ksvc
 #
 # The Kustomize overlay at --gitops-overlay-path should contain:
-#   - kustomization.yaml (with welcome-ksvc.yaml, counter-spinapp.yaml)
+#   - kustomization.yaml (with welcome-ksvc.yaml, backend/spins/counter/counter.yaml)
 #   - welcome-ksvc.yaml
-#   - counter-spinapp.yaml
+#   - backend/spins/counter/counter.yaml
 #
 # Idempotent: safe to re-run on an already-configured cluster (kubectl apply
 # is used throughout, waits and patches are conditional).
