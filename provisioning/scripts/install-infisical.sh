@@ -55,7 +55,7 @@ Required environment variables:
   INFISICAL_AUTH_SECRET      Auth secret for Infisical
 
 Options:
-  --kubeconfig PATH       Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH       Path to kubeconfig (default: ../dev/kubeconfig)
   --infisical-version VER Infisical Helm chart version (default: latest stable)
   --namespace NS          Kubernetes namespace for Infisical (default: infisical)
   --wait-timeout DUR      Timeout for Helm install and rollout (default: 10m)

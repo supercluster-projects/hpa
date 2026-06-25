@@ -72,7 +72,7 @@ Steps:
   6  Patch welcome-route HTTPRoute to point to welcome ksvc backend
 
 Options:
-  --kubeconfig PATH              Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH              Path to kubeconfig (default: ../dev/kubeconfig)
   --gitops-overlay-path PATH     Kustomize overlay directory (default: ../../gitops-workloads/functions/overlays/dev)
   --gateway-namespace NS         Envoy Gateway namespace (default: envoy-gateway-system)
   --gateway-name NAME            Gateway resource name (default: hpa-dev-gateway)

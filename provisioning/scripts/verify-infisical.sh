@@ -39,7 +39,7 @@ Verify Infisical backend health, service LoadBalancer IP, API endpoint,
 Secrets Operator pods, bootstrap Secret cleanup, and web UI.
 
 Options:
-  --kubeconfig PATH       Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH       Path to kubeconfig (default: ../dev/kubeconfig)
   --namespace NS          Infisical namespace (default: infisical)
   --secrets-op-ns NS      Secrets Operator namespace (default: infisical-secrets-operator)
   --help, -h              Show this help message

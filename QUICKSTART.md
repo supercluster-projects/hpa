@@ -67,7 +67,7 @@ done
 ## Step 1: Provision the OpenTofu infrastructure (Talos VMs)
 
 ```bash
-cd provisioning/tofu-libvirt-dev
+cd provisioning/dev
 
 # Initialize providers
 tofu init
@@ -81,13 +81,13 @@ tofu apply -auto-approve
 #   - 4 libvirt VMs (20 GB OS disk each)
 #   - 3 additional 20 GB Ceph disks (workers only)
 #   - hpa-bridge libvirt network (if it doesn't exist)
-#   - kubeconfig and talosconfig in provisioning/tofu-libvirt-dev/
+#   - kubeconfig and talosconfig in provisioning/dev/
 ```
 
 **Verify:**
 ```bash
 talosctl cluster status
-KUBECONFIG=provisioning/tofu-libvirt-dev/kubeconfig kubectl get nodes
+KUBECONFIG=provisioning/dev/kubeconfig kubectl get nodes
 # Expected: 4 nodes, all Ready
 ```
 
@@ -276,7 +276,7 @@ cd provisioning/scripts
 # Expected: All resources removed, summary shows counts > 0
 
 # Re-create from scratch
-cd ../tofu-libvirt-dev
+cd ../dev
 tofu apply -auto-approve
 
 # Then re-run Steps 2-10
@@ -418,7 +418,7 @@ provisioning/
 │   ├── verify-gateway.sh        # Gateway health
 │   ├── verify-gitops.sh         # GitOps health
 │   └── verify-workloads.sh      # Workloads health
-├── tofu-libvirt-dev/
+├── dev/
 │   ├── main.tf                  # OpenTofu module: VMs, disks, network
 │   ├── variables.tf             # VM configuration variables
 │   ├── outputs.tf               # kubeconfig, talosconfig, IPs

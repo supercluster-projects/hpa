@@ -56,7 +56,7 @@ Phases:
   6  Envoy Gateway LoadBalancer service IP assignment
 
 Options:
-  --kubeconfig PATH             Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH             Path to kubeconfig (default: ../dev/kubeconfig)
   --gateway-name NAME           Gateway resource name (default: hpa-dev-gateway)
   --gateway-namespace NS        Gateway namespace (default: envoy-gateway-system)
   --expected-envoy-pods COUNT   Expected Envoy Gateway pod count (default: 2)

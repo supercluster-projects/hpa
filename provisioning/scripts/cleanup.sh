@@ -7,7 +7,7 @@
 # (e.g. hpa-node-cp-0, hpa-node-worker-0, etc.), destroys and undefines
 # each VM (with --nvram), removes OS and Ceph disk volumes, destroys and
 # undefines the hpa-bridge network, and cleans up kubeconfig/talosconfig
-# from the provisioning/tofu-libvirt-dev directory.
+# from the provisioning/dev directory.
 #
 # All paths relative to provisioning/scripts/.
 # Usage: ./cleanup.sh [--prefix hpa-node] [--bridge hpa-bridge]
@@ -17,7 +17,7 @@ set -euo pipefail
 # ---- Defaults (matching provisioning variables) ---------------------------
 NODE_PREFIX="${NODE_PREFIX:-hpa-node}"
 BRIDGE="${BRIDGE_NAME:-hpa-bridge}"
-TOFU_DIR="${TOFU_DIR:-../tofu-libvirt-dev}"
+TOFU_DIR="${TOFU_DIR:-../dev}"
 
 # ---- Parse CLI overrides --------------------------------------------------
 while [[ $# -gt 0 ]]; do

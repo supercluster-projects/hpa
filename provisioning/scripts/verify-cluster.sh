@@ -13,7 +13,7 @@
 
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # --- Paths ---
-TALOSCONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/talosconfig"
+TALOSCONFIG="${SCRIPT_DIR}/../dev/talosconfig"
 EXPECTED_NODES=4
 
 # --- CLI Overrides ---

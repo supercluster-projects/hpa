@@ -64,7 +64,7 @@ Phases:
   5  Harbor connectivity test (requires --harbor-url)
 
 Options:
-  --kubeconfig PATH                 Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH                 Path to kubeconfig (default: ../dev/kubeconfig)
   --kargo-namespace NS              Kargo namespace (default: kargo)
   --argocd-namespace NS             ArgoCD namespace (default: argocd)
   --application-name NAME           ArgoCD Application name (default: hpa-workloads)

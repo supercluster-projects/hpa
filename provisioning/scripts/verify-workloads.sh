@@ -67,7 +67,7 @@ Phases:
   6  KeyDB counter-welcome key exists and increments
 
 Options:
-  --kubeconfig PATH            Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH            Path to kubeconfig (default: ../dev/kubeconfig)
   --envoy-ip IP                Envoy Gateway external IP for workload verification.
                                Must be in DEV_LB_POOL_CIDR (.208/28 by default).
                                Auto-discovered from the gateway if omitted.

@@ -16,7 +16,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-KUBECONFIG="${KUBECONFIG:-${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig}"
+KUBECONFIG="${KUBECONFIG:-${SCRIPT_DIR}/../dev/kubeconfig}"
 START_TIME=$(date +%s)
 
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }

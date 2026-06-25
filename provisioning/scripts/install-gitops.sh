@@ -76,7 +76,7 @@ Components installed:
   - ArgoCD Application    Syncs workloads from gitops-workloads (hpa-workloads)
 
 Options:
-  --kubeconfig PATH            Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH            Path to kubeconfig (default: ../dev/kubeconfig)
   --kargo-version VER          Kargo Helm chart version (default: 1.3.0)
   --argocd-version VER         ArgoCD Helm chart version (default: 7.8.0)
   --harbor-url URL             Harbor registry URL (default: http://harbor.harbor.svc.cluster.local)

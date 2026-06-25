@@ -70,7 +70,7 @@ Components installed:
   - KeyDB              Redis-compatible in-memory data store with PVC
 
 Options:
-  --kubeconfig PATH              Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH              Path to kubeconfig (default: ../dev/kubeconfig)
   --cert-manager-version VER     cert-manager version (default: v1.17.1)
   --knative-version VER          Knative Serving version (default: v1.16.0)
   --spin-operator-version VER    Spin operator Helm chart version (default: v0.13.0)

@@ -39,7 +39,7 @@ Verify Harbor registry health: pod readiness, LoadBalancer Ingress,
 registry API endpoint, PVC binding, and portal/UI availability.
 
 Options:
-  --kubeconfig PATH     Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
+  --kubeconfig PATH     Path to kubeconfig (default: ../dev/kubeconfig)
   --namespace NS        Harbor namespace (default: harbor)
   --expected-pods NUM   Expected number of pods (default: 8)
   --help, -h            Show this help message
