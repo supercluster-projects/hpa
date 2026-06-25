@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "skills": {
+    "code-review-excellence": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/developer-essentials/skills/code-review-excellence/SKILL.md",
+      "computedHash": "0f585a4ad2f6d8353069ca9051c6f0e8865abb9d3a6a268d423784c3c3852962"
+    },
+    "docx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/docx/SKILL.md",
+      "computedHash": "6962db07127ee540a56e4677f65576d0727668a1d67f7da8bc978f10791c2bfe"
+    },
+    "error-handling-patterns": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/developer-essentials/skills/error-handling-patterns/SKILL.md",
+      "computedHash": "73f0570edd3ddc740ba5411932a67954df375530bbffbe7fa0cecd8e59b0711e"
+    },
+    "git-advanced-workflows": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/developer-essentials/skills/git-advanced-workflows/SKILL.md",
+      "computedHash": "f4d0569096237c09b1c07896770fe487d7224c549f7aab0c6551a4f330fcf160"
+    },
+    "gitops-workflow": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/kubernetes-operations/skills/gitops-workflow/SKILL.md",
+      "computedHash": "e8df22024090440fce624e6a99faca4b66aa267a428b5a63a0c0416fa4eb2629"
+    },
+    "helm-chart-scaffolding": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/kubernetes-operations/skills/helm-chart-scaffolding/SKILL.md",
+      "computedHash": "d37f4bee4daa0c969ce9912054b46b04164d57ecd0e1d958e6dfb2e5aec16503"
+    },
+    "k8s-manifest-generator": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/kubernetes-operations/skills/k8s-manifest-generator/SKILL.md",
+      "computedHash": "ebd667a42fd4ea111ff557359cdc205deeaac1787280bec2d5b58a1541662d82"
+    },
+    "k8s-security-policies": {
+      "source": "wshobson/agents",
+      "sourceType": "github",
+      "skillPath": "plugins/kubernetes-operations/skills/k8s-security-policies/SKILL.md",
+      "computedHash": "47d2fe175423c7bc4f26019b3acf0ea7d3f37159172a217466c50b8d1b83cbb4"
+    },
+    "pdf": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pdf/SKILL.md",
+      "computedHash": "cfbc539377088ca7e44a813b30c306327385bbd973cd7a721e1743f60837dd62"
+    },
+    "pptx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/pptx/SKILL.md",
+      "computedHash": "6b8b859d26f93aa059c9870d1ab76b44ab69e3d6757ce4a03cc94cb760888073"
+    },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/skill-creator/SKILL.md",
+      "computedHash": "5ea13a6d9f0d4bb694405d79acd00cadec0d21bb138c4dd10fcf3c500cb835c2"
+    },
+    "terraform-stacks": {
+      "source": "hashicorp/agent-skills",
+      "sourceType": "github",
+      "skillPath": "terraform/module-generation/skills/terraform-stacks/SKILL.md",
+      "computedHash": "c90c845f0d9b08341d6c85d6957f105e8973582870f4a6601f5366dc57d8171a"
+    },
+    "terraform-style-guide": {
+      "source": "hashicorp/agent-skills",
+      "sourceType": "github",
+      "skillPath": "terraform/code-generation/skills/terraform-style-guide/SKILL.md",
+      "computedHash": "fd301fe5bfb41764acac67c25244cc5650b5dd0a5d8d037414449a2d3adecbbf"
+    },
+    "terraform-test": {
+      "source": "hashicorp/agent-skills",
+      "sourceType": "github",
+      "skillPath": "terraform/code-generation/skills/terraform-test/SKILL.md",
+      "computedHash": "c446a090ac98bea46704c16003761a030e6aa56a27b0e95d6914fbdb7c1d2a23"
+    },
+    "xlsx": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "skillPath": "skills/xlsx/SKILL.md",
+      "computedHash": "efd0c8011cf0677d8075cf93867ecec804f9a8754a777e1d2fdb46197e9c247f"
+    }
+  }
+}
