@@ -19,7 +19,7 @@ resource "talos_machine_secrets" "this" {}
 # Step 2a: Talos client configuration (used by apply and bootstrap resources)
 # ---------------------------------------------------------------------------
 data "talos_client_configuration" "this" {
-  cluster_name         = var.CLUSTER_NAME
+  cluster_name         = var.DEV_CLUSTER_NAME
   client_configuration = talos_machine_secrets.this.client_configuration
   nodes                = local.all_ips
 }
@@ -31,7 +31,7 @@ data "talos_client_configuration" "this" {
 # (cluster-config.yaml). Per-node patches (hostname, static IP) are applied
 # at the talos_machine_configuration_apply step.
 data "talos_machine_configuration" "controlplane" {
-  cluster_name     = var.CLUSTER_NAME
+  cluster_name     = var.DEV_CLUSTER_NAME
   machine_type     = "controlplane"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
@@ -42,7 +42,7 @@ data "talos_machine_configuration" "controlplane" {
 }
 
 data "talos_machine_configuration" "worker" {
-  cluster_name     = var.CLUSTER_NAME
+  cluster_name     = var.DEV_CLUSTER_NAME
   machine_type     = "worker"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
@@ -60,7 +60,7 @@ resource "libvirt_volume" "os_disk" {
 
   name     = "${each.key}-os.qcow2"
   pool     = "default"
-  capacity = var.OS_DISK_SIZE_GB * 1073741824
+  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
 
   target = {
     format = { type = "qcow2" }
@@ -81,7 +81,7 @@ resource "libvirt_volume" "ceph_disk" {
 
   name     = "${each.key}-ceph.raw"
   pool     = "default"
-  capacity = var.CEPH_DISK_SIZE_GB * 1073741824
+  capacity = var.DEV_CEPH_DISK_SIZE_GB * 1073741824
 
   target = {
     format = { type = "raw" }
@@ -100,9 +100,9 @@ resource "libvirt_domain" "node" {
 
   name        = each.key
   type        = "kvm"
-  memory      = each.value.type == "controlplane" ? var.CP_RAM_MB : var.WORKER_RAM_MB
+  memory      = each.value.type == "controlplane" ? var.DEV_CP_RAM_MB : var.DEV_WORKER_RAM_MB
   memory_unit = "MiB"
-  vcpu        = var.VM_CPU
+  vcpu        = var.DEV_VM_CPU
   running     = true
   autostart   = true
 
@@ -159,7 +159,7 @@ resource "libvirt_domain" "node" {
       {
         source = {
           bridge = {
-            bridge = var.BRIDGE_NAME
+            bridge = var.DEV_BRIDGE_NAME
           }
         }
         model = { type = "virtio" }
@@ -167,7 +167,7 @@ resource "libvirt_domain" "node" {
       {
         source = {
           bridge = {
-            bridge = var.BRIDGE_NAME
+            bridge = var.DEV_BRIDGE_NAME
           }
         }
         model = { type = "virtio" }
@@ -206,15 +206,15 @@ resource "talos_machine_configuration_apply" "node" {
       machine = {
         network = {
           hostname    = each.key
-          nameservers = var.DNS_SERVERS
+          nameservers = var.DEV_DNS_SERVERS
           interfaces = [
             {
               interface = "bond0"
-              addresses = ["${each.value.ip}/${split("/", var.CIDR_BLOCK)[1]}"]
+              addresses = ["${each.value.ip}/${split("/", var.DEV_CIDR_BLOCK)[1]}"]
               routes = [
                 {
                   network = "0.0.0.0/0"
-                  gateway = var.GATEWAY
+                  gateway = var.DEV_GATEWAY
                 }
               ]
             }
