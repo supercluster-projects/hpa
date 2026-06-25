@@ -17,3 +17,7 @@ spec:
           env:
             - name: COUNTER_ADDR
               value: "http://counter.hpa-workloads.svc.cluster.local:8080"
+          envFrom:
+            - secretRef:
+                name: welcome-infisical-secrets
+                optional: true
