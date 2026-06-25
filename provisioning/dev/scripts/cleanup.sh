@@ -49,7 +49,7 @@ echo "[$(date +%H:%M:%S)] Starting cleanup for node prefix '${NODE_PREFIX}' on b
 
 # ---- Step 1: Destroy and undefine all Talos VMs ---------------------------
 echo "[$(date +%H:%M:%S)] Looking for libvirt domains matching '${NODE_PREFIX}'..." >&2
-VM_NAMES=$(virsh list --name --all 2>/dev/null | grep -E "^${NODE_PREFIX}-(cp|worker)-" || true)
+VM_NAMES=$(virsh -c qemu:///system list --name --all 2>/dev/null | grep -E "^${NODE_PREFIX}-(cp|worker)-" || true)
 
 if [[ -z "${VM_NAMES}" ]]; then
   echo "[$(date +%H:%M:%S)] No VMs found matching prefix '${NODE_PREFIX}'." >&2
@@ -57,25 +57,25 @@ else
   while IFS= read -r vm; do
     [[ -z "${vm}" ]] && continue
     echo "[$(date +%H:%M:%S)] Destroying VM '${vm}'..." >&2
-    if virsh destroy "${vm}" > /dev/null 2>&1; then
+    if virsh -c qemu:///system destroy "${vm}" > /dev/null 2>&1; then
       echo "[$(date +%H:%M:%S)]   Destroyed: ${vm}" >&2
     else
-      cleanup_fail "virsh destroy '${vm}' (may already be stopped)"
+      cleanup_fail "virsh -c qemu:///system destroy '${vm}' (may already be stopped)"
     fi
 
     echo "[$(date +%H:%M:%S)] Undefining VM '${vm}' (with --nvram)..." >&2
-    if virsh undefine --nvram "${vm}" > /dev/null 2>&1; then
+    if virsh -c qemu:///system undefine --nvram "${vm}" > /dev/null 2>&1; then
       echo "[$(date +%H:%M:%S)]   Undefined: ${vm}" >&2
       DESTROYED_VMS=$((DESTROYED_VMS + 1))
     else
-      cleanup_fail "virsh undefine --nvram '${vm}'"
+      cleanup_fail "virsh -c qemu:///system undefine --nvram '${vm}'"
     fi
   done <<< "${VM_NAMES}"
 fi
 
 # ---- Step 2: Remove libvirt volumes matching node OS and Ceph disks -------
 echo "[$(date +%H:%M:%S)] Looking for libvirt volumes matching '${NODE_PREFIX}'..." >&2
-VOL_NAMES=$(virsh vol-list default 2>/dev/null | awk -v prefix="${NODE_PREFIX}-" '$1 ~ prefix {print $1}' || true)
+VOL_NAMES=$(virsh -c qemu:///system vol-list default 2>/dev/null | awk -v prefix="${NODE_PREFIX}-" '$1 ~ prefix {print $1}' || true)
 
 if [[ -z "${VOL_NAMES}" ]]; then
   echo "[$(date +%H:%M:%S)] No volumes found matching prefix '${NODE_PREFIX}'." >&2
@@ -83,29 +83,29 @@ else
   while IFS= read -r vol; do
     [[ -z "${vol}" ]] && continue
     echo "[$(date +%H:%M:%S)] Deleting volume '${vol}'..." >&2
-    if virsh vol-delete --pool default "${vol}" > /dev/null 2>&1; then
+    if virsh -c qemu:///system vol-delete --pool default "${vol}" > /dev/null 2>&1; then
       echo "[$(date +%H:%M:%S)]   Deleted: ${vol}" >&2
       DESTROYED_VOLS=$((DESTROYED_VOLS + 1))
     else
-      cleanup_fail "virsh vol-delete '${vol}'"
+      cleanup_fail "virsh -c qemu:///system vol-delete '${vol}'"
     fi
   done <<< "${VOL_NAMES}"
 fi
 
 # ---- Step 3: Destroy and undefine the hpa-bridge network ------------------
-if virsh net-info "${BRIDGE}" > /dev/null 2>&1; then
+if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
   echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' exists. Destroying..." >&2
-  if virsh net-destroy "${BRIDGE}" > /dev/null 2>&1; then
+  if virsh -c qemu:///system net-destroy "${BRIDGE}" > /dev/null 2>&1; then
     echo "[$(date +%H:%M:%S)]   Network destroyed: ${BRIDGE}" >&2
   else
-    cleanup_fail "virsh net-destroy '${BRIDGE}'"
+    cleanup_fail "virsh -c qemu:///system net-destroy '${BRIDGE}'"
   fi
 
-  if virsh net-undefine "${BRIDGE}" > /dev/null 2>&1; then
+  if virsh -c qemu:///system net-undefine "${BRIDGE}" > /dev/null 2>&1; then
     echo "[$(date +%H:%M:%S)]   Network undefined: ${BRIDGE}" >&2
     DESTROYED_NETS=$((DESTROYED_NETS + 1))
   else
-    cleanup_fail "virsh net-undefine '${BRIDGE}'"
+    cleanup_fail "virsh -c qemu:///system net-undefine '${BRIDGE}'"
   fi
 else
   echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' does not exist. Skipping." >&2

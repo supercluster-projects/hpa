@@ -3,24 +3,26 @@
 # startup.sh — Full dev environment bootstrap in one shot
 #
 # Orchestrates the complete pipeline from bare metal to a running HPA dev
-# cluster. Run this after `tofu apply -auto-approve` has provisioned the
-# Talos VMs. Every step is idempotent — safe to re-run if something fails.
+# cluster. Handles everything: VM provisioning via OpenTofu, then all Helm
+# charts and workload deployments. Every step is idempotent.
 #
-# Usage: ./startup.sh [--kubeconfig <path>] [--envoy-ip <ip>] [--help]
+# Usage: ./startup.sh [options]
 #
 # Options:
 #   --kubeconfig PATH   Path to kubeconfig (default: ../opentofu/kubeconfig)
-#   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected if omitted).
-#                       Must be within DEV_LB_POOL_CIDR (.208/28 by default).
+#   --tofu-dir DIR      OpenTofu provisioning directory (default: ../opentofu)
+#   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected
+#                       if omitted, must be within DEV_LB_POOL_CIDR)
+#   --skip-tofu         Skip OpenTofu provisioning (use existing kubeconfig)
 #   --help, -h          Show this help message
 #
 # Environment:
-#   .env file at project root sourced automatically if present (see .env.example)
+#   .env file at project root sourced automatically if present
 #   CLI flags override env vars which override script defaults
 #
-#   INFISICAL_ENCRYPTION_KEY   Must be set in .env (no default, generate with openssl rand -hex 32)
+#   INFISICAL_ENCRYPTION_KEY   Must be set in .env (no default)
 #   INFISICAL_ADMIN_PASSWORD   Must be set in .env (no default)
-#   INFISICAL_AUTH_SECRET      Must be set in .env (no default, generate with openssl rand -hex 64)
+#   INFISICAL_AUTH_SECRET      Must be set in .env (no default)
 #
 # Exit code: 0 on success, non-zero on first failure
 #
@@ -33,28 +35,55 @@ STARTUP_LOG="${PROJECT_ROOT}/startup.log"
 exec > >(tee -a "${STARTUP_LOG}") 2>&1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
 
+# ---- Bootstrap .env if missing --------------------------------------------
+ENV_SAMPLE="${PROJECT_ROOT}/.env.example"
+if [ ! -f "${PROJECT_ROOT}/.env" ] && [ -f "${ENV_SAMPLE}" ]; then
+  cp "${ENV_SAMPLE}" "${PROJECT_ROOT}/.env"
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created .env from .env.example — review and edit if needed."
+  # Source the newly created .env
+  set -a; source "${PROJECT_ROOT}/.env"; set +a
+fi
+
 # ---- Config ---------------------------------------------------------------
 ENVOY_IP=""
+TOFU_DIR="${SCRIPT_DIR}/../opentofu"
+SKIP_TOFU=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --kubeconfig)  KUBECONFIG="$2";  shift 2 ;;
-    --envoy-ip)     ENVOY_IP="$2";    shift 2 ;;
+    --envoy-ip)    ENVOY_IP="$2";    shift 2 ;;
+    --tofu-dir)    TOFU_DIR="$2";    shift 2 ;;
+    --skip-tofu)   SKIP_TOFU=true;    shift ;;
     --help|-h)
       cat <<HELP
 Usage: $(basename "$0") [options]
 
-Full dev environment bootstrap in one shot.
+Full dev environment bootstrap in one shot — from bare metal to a running
+HPA dev cluster. Provisions VMs via OpenTofu, then installs all platform
+components and workloads.
 
-Prerequisites:
-  1. tofu apply has already provisioned Talos VMs
-  2. kubectl can reach the cluster via kubeconfig
-  3. Configure .env at project root (see .env.example for all variables)
+Options:
+  --skip-tofu         Skip VM provisioning (use existing kubeconfig)
+  --tofu-dir DIR      OpenTofu directory (default: ../opentofu)
+  --kubeconfig PATH   Path to kubeconfig (default: ../opentofu/kubeconfig)
+  --envoy-ip IP       Envoy LB IP for endpoint verification
+  --help, -h          Show this help message
 
-Steps:
-  1. setup-bridge.sh       4. install-harbor.sh      7. install-gateway.sh
-  2. install-cilium.sh     5. install-infisical.sh   8. install-gitops.sh
-  3. install-rook-ceph.sh  6. install-runtimes.sh    9. install-workloads.sh
+Pipeline steps:
+  0. OpenTofu apply (4 Talos VMs + kubeconfig)     [skip with --skip-tofu]
+  1. Setup hpa-bridge network
+  2. Install Cilium CNI
+  3. Install Rook Ceph
+  4. Install Harbor
+  5. Install Infisical
+  6. Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)
+  7. Install Envoy Gateway + Headlamp
+  8. Install GitOps (Kargo + ArgoCD)
+  9. Deploy Workloads (Welcome + Counter)
+
+Environment:
+  .env file at project root sourced automatically
 
 Exit 0 on success, non-zero on first failure.
 HELP
@@ -65,6 +94,81 @@ HELP
 done
 
 export KUBECONFIG
+
+# ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
+if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
+  log "=========================================================="
+  log "Step 0: Provision Talos VMs via OpenTofu"
+  log "=========================================================="
+  log "tofu dir:     ${TOFU_DIR}"
+  log "kubeconfig:   ${KUBECONFIG}"
+  log ""
+
+  command -v tofu >/dev/null 2>&1 || die "OpenTofu (tofu) not found in PATH"
+
+  TOFU_ABS_DIR="$(cd "${TOFU_DIR}" 2>/dev/null && pwd)"
+  if [ -z "${TOFU_ABS_DIR}" ]; then
+    die "OpenTofu directory not found at ${TOFU_DIR}"
+  fi
+
+  # tofu init if needed
+  if [ ! -f "${TOFU_ABS_DIR}/.terraform.lock.hcl" ]; then
+    log "Running tofu init..."
+    (cd "${TOFU_ABS_DIR}" && tofu init) || die "tofu init failed"
+  fi
+
+  log "Running tofu apply -auto-approve (creates 4 Talos VMs)..."
+  log "  This takes ~5-8 minutes..."
+
+  TFDIR="${TOFU_ABS_DIR}"
+  TMP_VARS="${TFDIR}/dev.auto.tfvars"
+
+  # Generate .auto.tfvars from env vars (sourced from .env by preamble.sh).
+  # Only writes variables that are actually set — tofu will fail for any
+  # missing required variable, which is the desired behavior.
+  log "Generating ${TMP_VARS} from .env variables..."
+  {
+    for var_name in DEV_CLUSTER_NAME DEV_CP_COUNT DEV_WORKER_COUNT DEV_VM_CPU \
+                    DEV_CP_RAM_MB DEV_WORKER_RAM_MB DEV_OS_DISK_SIZE_GB \
+                    DEV_CEPH_DISK_SIZE_GB DEV_BRIDGE_NAME DEV_NODE_PREFIX \
+                    DEV_CIDR_BLOCK TALOS_VERSION DEV_TALOS_IMAGE_FACTORY_URL; do
+      if [ -n "${!var_name:-}" ]; then
+        # Quote strings, keep numbers bare
+        case "$var_name" in
+          DEV_CP_COUNT|DEV_WORKER_COUNT|DEV_VM_CPU|DEV_CP_RAM_MB|DEV_WORKER_RAM_MB|DEV_OS_DISK_SIZE_GB|DEV_CEPH_DISK_SIZE_GB)
+            echo "${var_name} = ${!var_name}"
+            ;;
+          *)
+            echo "${var_name} = \"${!var_name}\""
+            ;;
+        esac
+      fi
+    done
+  } > "${TMP_VARS}"
+
+  log "Generated ${TMP_VARS}."
+  log "Contents:"
+  while IFS= read -r line; do log "  ${line}"; done < "${TMP_VARS}"
+
+  (cd "${TFDIR}" && tofu apply -auto-approve) || {
+    log "FAILED: Contents of ${TMP_VARS}:"
+    if [ -f "${TMP_VARS}" ]; then
+      while IFS= read -r line; do log "  ${line}"; done < "${TMP_VARS}"
+    else
+      log "  (file was not created — no env vars were set)"
+    fi
+    rm -f "${TMP_VARS}"
+    die "tofu apply failed"
+  }
+
+  log "tofu apply completed successfully."
+
+  log "tofu apply completed successfully."
+elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
+  log "kubeconfig already exists — skipping tofu apply."
+else
+  log "--skip-tofu set — using existing kubeconfig (if any)."
+fi
 
 # ---- Verify cluster access ------------------------------------------------
 log "=========================================================="
@@ -111,7 +215,9 @@ step() {
   fi
 }
 
-TOTAL_STEPS=9
+TOTAL_STEPS=10
+
+# Step 0 (tofu) is already done above
 
 step 1 "Setup hpa-bridge network"   ./setup-bridge.sh
 step 2 "Install Cilium CNI"         ./install-cilium.sh

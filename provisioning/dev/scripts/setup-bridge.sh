@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 # setup-bridge.sh — Create the hpa-bridge libvirt network if it doesn't exist
 #
-# Checks if the bridge network already exists via 'virsh net-info'. If it
+# Checks if the bridge network already exists via 'virsh -c qemu:///system net-info'. If it
 # does, exits 0 immediately (idempotent). Otherwise, defines and starts the
 # network using the provided CIDR, gateway, and DHCP range.
 #
@@ -63,7 +63,7 @@ NETWORK_ADDR="${CIDR%/*}"
 
 # ---- Step 1: Check if bridge already exists -------------------------------
 echo "[$(date +%H:%M:%S)] Checking if network '${BRIDGE}' exists..." >&2
-if virsh net-info "${BRIDGE}" > /dev/null 2>&1; then
+if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
   echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Nothing to do. Exiting." >&2
   exit 0
 fi
@@ -104,14 +104,14 @@ EOF
 
 # ---- Step 3: Define and start the network ---------------------------------
 echo "[$(date +%H:%M:%S)] Defining network '${BRIDGE}' from XML..." >&2
-virsh net-define "${NET_XML}" > /dev/null
+virsh -c qemu:///system net-define "${NET_XML}" > /dev/null
 echo "[$(date +%H:%M:%S)] Network defined successfully." >&2
 
 echo "[$(date +%H:%M:%S)] Starting network '${BRIDGE}'..." >&2
-virsh net-start "${BRIDGE}" > /dev/null
+virsh -c qemu:///system net-start "${BRIDGE}" > /dev/null
 echo "[$(date +%H:%M:%S)] Network started successfully." >&2
 
 # ---- Step 4: Verify -------------------------------------------------------
-virsh net-info "${BRIDGE}" > /dev/null 2>&1
+virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1
 echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' is active and ready." >&2
 exit 0
