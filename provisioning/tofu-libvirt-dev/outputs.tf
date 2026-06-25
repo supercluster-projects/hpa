@@ -30,7 +30,7 @@ output "all_node_ips" {
 
 output "node_count" {
   description = "Total number of nodes in the cluster"
-  value       = var.cp_count + var.worker_count
+  value       = var.CP_COUNT + var.WORKER_COUNT
 }
 
 output "cluster_endpoint" {

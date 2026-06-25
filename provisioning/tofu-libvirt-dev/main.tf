@@ -19,7 +19,7 @@ resource "talos_machine_secrets" "this" {}
 # Step 2a: Talos client configuration (used by apply and bootstrap resources)
 # ---------------------------------------------------------------------------
 data "talos_client_configuration" "this" {
-  cluster_name         = var.cluster_name
+  cluster_name         = var.CLUSTER_NAME
   client_configuration = talos_machine_secrets.this.client_configuration
   nodes                = local.all_ips
 }
@@ -31,7 +31,7 @@ data "talos_client_configuration" "this" {
 # (cluster-config.yaml). Per-node patches (hostname, static IP) are applied
 # at the talos_machine_configuration_apply step.
 data "talos_machine_configuration" "controlplane" {
-  cluster_name     = var.cluster_name
+  cluster_name     = var.CLUSTER_NAME
   machine_type     = "controlplane"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
@@ -42,7 +42,7 @@ data "talos_machine_configuration" "controlplane" {
 }
 
 data "talos_machine_configuration" "worker" {
-  cluster_name     = var.cluster_name
+  cluster_name     = var.CLUSTER_NAME
   machine_type     = "worker"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
@@ -60,7 +60,7 @@ resource "libvirt_volume" "os_disk" {
 
   name     = "${each.key}-os.qcow2"
   pool     = "default"
-  capacity = var.os_disk_size_gb * 1073741824
+  capacity = var.OS_DISK_SIZE_GB * 1073741824
 
   target = {
     format = { type = "qcow2" }
@@ -81,7 +81,7 @@ resource "libvirt_volume" "ceph_disk" {
 
   name     = "${each.key}-ceph.raw"
   pool     = "default"
-  capacity = var.ceph_disk_size_gb * 1073741824
+  capacity = var.CEPH_DISK_SIZE_GB * 1073741824
 
   target = {
     format = { type = "raw" }
@@ -100,14 +100,14 @@ resource "libvirt_domain" "node" {
 
   name        = each.key
   type        = "kvm"
-  memory      = each.value.type == "controlplane" ? var.cp_ram_mb : var.worker_ram_mb
+  memory      = each.value.type == "controlplane" ? var.CP_RAM_MB : var.WORKER_RAM_MB
   memory_unit = "MiB"
-  vcpu        = var.vm_cpu
+  vcpu        = var.VM_CPU
   running     = true
   autostart   = true
 
   os = {
-    type = "hvm"
+    type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
     boot_devices = [{ dev = "hd" }]
@@ -159,7 +159,7 @@ resource "libvirt_domain" "node" {
       {
         source = {
           bridge = {
-            bridge = var.bridge_name
+            bridge = var.BRIDGE_NAME
           }
         }
         model = { type = "virtio" }
@@ -167,7 +167,7 @@ resource "libvirt_domain" "node" {
       {
         source = {
           bridge = {
-            bridge = var.bridge_name
+            bridge = var.BRIDGE_NAME
           }
         }
         model = { type = "virtio" }
@@ -182,14 +182,9 @@ resource "libvirt_domain" "node" {
       }
     ]
 
-    graphics = [
-      {
-        type        = "vnc"
-        autoport    = true
-        listen_type = "address"
-        listen      = "127.0.0.1"
-      }
-    ]
+    # VNC graphics omitted: libvirt provider 0.9.8 has a known bug where
+    # the graphics element vanishes on read-back, causing apply failure.
+    # VMs are headless (provisioned via serial console / talosctl).
   }
 }
 
@@ -210,27 +205,20 @@ resource "talos_machine_configuration_apply" "node" {
     yamlencode({
       machine = {
         network = {
-          hostname = each.key
+          hostname    = each.key
+          nameservers = var.DNS_SERVERS
           interfaces = [
             {
               interface = "bond0"
-              addresses = ["${each.value.ip}/${split("/", var.cidr_block)[1]}"]
+              addresses = ["${each.value.ip}/${split("/", var.CIDR_BLOCK)[1]}"]
               routes = [
                 {
                   network = "0.0.0.0/0"
-                  gateway = var.gateway
+                  gateway = var.GATEWAY
                 }
               ]
             }
           ]
-        }
-      }
-      cluster = {
-        network = {
-          dns = {
-            domain      = "${var.cluster_name}.local"
-            nameservers = var.dns_servers
-          }
         }
       }
     })

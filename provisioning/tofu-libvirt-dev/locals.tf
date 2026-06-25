@@ -3,14 +3,14 @@
 
 locals {
   # Node names: control plane and worker nodes
-  cp_node_names     = [for i in range(var.cp_count) : "${var.node_prefix}-cp-${i}"]
-  worker_node_names = [for i in range(var.worker_count) : "${var.node_prefix}-worker-${i}"]
+  cp_node_names     = [for i in range(var.CP_COUNT) : "${var.NODE_PREFIX}-cp-${i}"]
+  worker_node_names = [for i in range(var.WORKER_COUNT) : "${var.NODE_PREFIX}-worker-${i}"]
   all_node_names    = concat(local.cp_node_names, local.worker_node_names)
 
   # Static IP assignment for each node within the cluster CIDR
   # Control plane: .100, .101, ...; Workers: .110, .111, ...
-  cp_ips     = [for i in range(var.cp_count) : cidrhost(var.cidr_block, 100 + i)]
-  worker_ips = [for i in range(var.worker_count) : cidrhost(var.cidr_block, 110 + i)]
+  cp_ips     = [for i in range(var.CP_COUNT) : cidrhost(var.CIDR_BLOCK, 100 + i)]
+  worker_ips = [for i in range(var.WORKER_COUNT) : cidrhost(var.CIDR_BLOCK, 110 + i)]
   all_ips    = concat(local.cp_ips, local.worker_ips)
 
   # Kubernetes API endpoint on the first control plane node
@@ -38,7 +38,7 @@ locals {
 
   # Base image URL for the Talos metal qcow2 image from the image factory
   # Uses the "zero" schematic (no customization) matching the selected Talos version
-  # Schematic ID: 376567988ad370138cb8fc01d4c6144a9e3c1a4f32a8e1b0925e7e90c8c1f2e2
-  talos_schematic_id = "376567988ad370138cb8fc01d4c6144a9e3c1a4f32a8e1b0925e7e90c8c1f2e2"
-  iso_url            = "${var.talos_image_factory_url}/${local.talos_schematic_id}/${var.talos_version}/metal-amd64.qcow2"
+  # Schematic ID: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba (official well-known zero schematic)
+  talos_schematic_id = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
+  iso_url            = "${var.TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
 }
