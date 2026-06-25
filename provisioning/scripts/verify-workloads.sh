@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-workloads.sh — Welcome + Counter workload health verification
 #
 # Verifies all application workloads deployed by install-workloads.sh:
@@ -24,22 +25,8 @@
 #                              [--keydb-namespace <ns>]
 #                              [--help]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-ENVOY_IP=""
-GATEWAY_NAMESPACE="envoy-gateway-system"
-GATEWAY_NAME="hpa-dev-gateway"
-WORKLOADS_NAMESPACE="hpa-workloads"
-HTTPROUTE_NAME="welcome-route"
-KEYDB_NAMESPACE="keydb"
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-gitops.sh — Kargo + ArgoCD + Warehouse + Application verification
 #
 # Verifies the GitOps delivery pipeline that S06 workloads depend on:
@@ -25,24 +26,8 @@
 #           [--expected-kargo-pods <count>] [--expected-argocd-pods <count>]
 #           [--help]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-KARGO_NAMESPACE="kargo"
-ARGOCD_NAMESPACE="argocd"
-APPLICATION_NAME="hpa-workloads"
-WAREHOUSE_NAME="hpa-warehouse"
-HARBOR_URL=""
-# Default expected pod counts
-EXPECTED_KARGO_PODS=2
-EXPECTED_ARGOCD_PODS=3
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

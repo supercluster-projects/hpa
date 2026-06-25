@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-gateway.sh — Envoy Gateway + Headlamp + route verification
 #
 # Verifies the ingress gateway stack that workloads depend on:
@@ -23,19 +24,8 @@
 #           [--expected-envoy-pods <count>]
 #           [--help]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-GATEWAY_NAME="hpa-dev-gateway"
-GATEWAY_NAMESPACE="envoy-gateway-system"
-EXPECTED_ENVOY_PODS=2
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

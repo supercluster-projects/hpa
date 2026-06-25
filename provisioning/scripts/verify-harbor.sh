@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-harbor.sh -- Harbor registry health verification
 #
 # Verifies Harbor pod health, LoadBalancer Ingress IP assignment, registry
@@ -15,18 +16,8 @@
 # Usage: ./verify-harbor.sh [--kubeconfig <path>] [--namespace <ns>]
 #                           [--expected-pods <count>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-NAMESPACE="harbor"
-EXPECTED_PODS=8
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

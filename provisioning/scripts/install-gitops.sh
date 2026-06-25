@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-gitops.sh — Deploy Kargo + ArgoCD GitOps pipeline on K8s
 #
 # Installs the GitOps delivery pipeline that watches Harbor for new images
@@ -28,30 +29,8 @@
 #                            [--namespace-prefix <prefix>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-KARGO_VERSION="1.3.0"
-ARGOCD_VERSION="7.8.0"
-HARBOR_URL="http://harbor.harbor.svc.cluster.local"
-HARBOR_PROJECT="hpa-workloads"
-GITOPS_REPO_URL="https://github.com/example/gitops-workloads.git"
-GITOPS_REVISION="HEAD"
-CLUSTER_DEST_NAME="in-cluster"
-CLUSTER_DEST_URL="https://kubernetes.default.svc"
-NAMESPACE_PREFIX=""
-WAIT_TIMEOUT="10m"
-
-# ---- Derived namespaces ---------------------------------------------------
-KARGO_NAMESPACE="${NAMESPACE_PREFIX}kargo"
-ARGOCD_NAMESPACE="${NAMESPACE_PREFIX}argocd"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

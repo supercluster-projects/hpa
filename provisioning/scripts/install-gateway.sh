@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-gateway.sh — Deploy Envoy Gateway + Headlamp + HTTPRoutes on K8s
 #
 # Installs:
@@ -24,26 +25,8 @@
 #                             [--domain <domain>]
 #                             [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-ENVOY_VERSION="v1.2.2"
-HEADLAMP_VERSION="0.16.0"
-GATEWAY_NAME="hpa-dev-gateway"
-LB_TYPE="LoadBalancer"
-DOMAIN=""
-WAIT_TIMEOUT="10m"
-
-# ---- Derived namespaces ---------------------------------------------------
-ENVOY_GATEWAY_NAMESPACE="envoy-gateway-system"
-HEADLAMP_NAMESPACE="headlamp"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

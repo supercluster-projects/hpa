@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-harbor.sh — Deploy Harbor OCI image registry on a Kubernetes cluster
 #
 # Installs Harbor via Helm with ceph-rbd PVCs for all persistence and a
@@ -14,22 +15,8 @@
 #                            [--storage-class <name>] [--namespace <ns>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-HARBOR_VERSION="2.12.2"
-STORAGE_CLASS="ceph-rbd"
-NAMESPACE="harbor"
-WAIT_TIMEOUT="10m"
-HELM_RELEASE_NAME="harbor"
-HARBOR_ADMIN_PASSWORD="Harbor12345"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

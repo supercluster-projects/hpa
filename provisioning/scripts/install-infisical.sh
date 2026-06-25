@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-infisical.sh — Deploy Infisical secrets management platform with
 #                         Infisical Secrets Operator on a Kubernetes cluster
 #
@@ -20,24 +21,8 @@
 # Usage: ./install-infisical.sh [--kubeconfig <path>] [--infisical-version <ver>]
 #                               [--namespace <ns>] [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-INFISICAL_VERSION=""  # chart default (latest stable)
-NAMESPACE="infisical"
-WAIT_TIMEOUT="10m"
-HELM_RELEASE_NAME="infisical"
-SECRETS_OP_NAMESPACE="infisical-secrets-operator"
-SECRETS_OP_RELEASE="infisical-secrets-operator"
-INFISICAL_HELM_REPO="https://dl.infisical.com/helm-charts"
-BOOTSTRAP_SECRET_NAME="bootstrap-infisical"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

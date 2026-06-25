@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-runtimes.sh — Core runtime health verification
 #
 # Verifies all core runtimes that downstream components depend on:
@@ -20,23 +21,8 @@
 #           [--expected-runtime-pods cert-manager:3,knative-serving:2,...]
 #           [--wait-timeout <seconds>] [--help]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-WAIT_TIMEOUT=120
-# Default expected pod counts: namespace -> count
-declare -A EXPECTED_PODS
-EXPECTED_PODS["cert-manager"]=3
-EXPECTED_PODS["knative-serving"]=2
-EXPECTED_PODS["spin-operator"]=1
-EXPECTED_PODS["keydb"]=2
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # Parse expected-runtime-pods argument
 # Input format: "cert-manager:3,knative-serving:2,spin-operator:1,keydb:2"

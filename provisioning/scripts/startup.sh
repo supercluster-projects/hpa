@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # startup.sh — Full dev environment bootstrap in one shot
 #
 # Orchestrates the complete pipeline from bare metal to a running HPA dev
@@ -24,31 +25,21 @@
 #
 # Exit code: 0 on success, non-zero on first failure
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Config ---------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
 ENVOY_IP=""
 START_TIME=$(date +%s)
 
 # ---- Environment file -----------------------------------------------------
-# Source .env from the project root if present. CLI flags override env vars.
-# The .env file lives outside provisioning/ at the worktree root.
 ENV_FILE="${PROJECT_ROOT}/.env"
+
+# Source .env if present; CLI flags override env vars which override defaults
 if [ -f "${ENV_FILE}" ]; then
-  # shellcheck source=/dev/null
   set -a; source "${ENV_FILE}"; set +a
   log "Loaded environment from ${ENV_FILE}"
 fi
 
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
-
-# ---- CLI ----------------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --kubeconfig)  KUBECONFIG="$2";  shift 2 ;;

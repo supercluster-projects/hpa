@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-rook-ceph.sh — Deploy Rook Ceph operator with CephCluster CR and
 #                         ceph-rbd StorageClass
 #
@@ -16,26 +17,8 @@
 #                               [--wait-timeout <duration>] [--pool-cidr <cidr>]
 #                               [--worker-count <count>] [--node-prefix <prefix>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-ROOK_VERSION="v1.16.4"
-CEPH_IMAGE="quay.io/ceph/ceph:v20.2.1"
-CLUSTER_NAME="hpa-dev"
-WAIT_TIMEOUT="10m"
-POOL_CIDR="${DEV_CIDR_BLOCK:-192.168.122.0/24}"
-WORKER_COUNT=3
-NODE_PREFIX="hpa-node"
-HELM_RELEASE_NAME="rook-ceph-operator"
-HELM_NAMESPACE="rook-ceph"
-ROOK_HELM_REPO="https://charts.rook.io/release"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

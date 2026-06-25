@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-ceph.sh -- Rook Ceph health verification
 #
 # Verifies Rook Ceph operator pod health, CephCluster CR status (phase,
@@ -14,19 +15,8 @@
 # Usage: ./verify-ceph.sh [--kubeconfig <path>] [--expected-osds <count>]
 #                         [--expected-mons <count>] [--namespace <ns>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-EXPECTED_OSDS=3
-EXPECTED_MONS=3
-NAMESPACE="rook-ceph"
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-runtimes.sh — Deploy Knative Serving + cert-manager + SpinKube
 #                       + KeyDB on a Kubernetes cluster
 #
@@ -22,31 +23,8 @@
 #                              [--namespace-prefix <prefix>]
 #                              [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-CERT_MANAGER_VERSION="v1.17.1"
-KNATIVE_VERSION="v1.16.0"
-SPIN_OPERATOR_VERSION="v0.13.0"
-KEYDB_VERSION="x86_64_v6.3.3"
-KEYDB_IMAGE="eqalpha/keydb:${KEYDB_VERSION}"
-STORAGE_CLASS="ceph-rbd"
-NAMESPACE_PREFIX=""
-WAIT_TIMEOUT="10m"
-
-# ---- Derived namespaces ---------------------------------------------------
-CERT_MANAGER_NAMESPACE="${NAMESPACE_PREFIX}cert-manager"
-KNATIVE_NAMESPACE="${NAMESPACE_PREFIX}knative-serving"
-KOURIER_NAMESPACE="${NAMESPACE_PREFIX}kourier-system"
-SPIN_OPERATOR_NAMESPACE="${NAMESPACE_PREFIX}spin-operator"
-KEYDB_NAMESPACE="${NAMESPACE_PREFIX}keydb"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

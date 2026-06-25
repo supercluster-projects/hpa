@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-cilium.sh — Deploy Cilium CNI on a Talos cluster with L2 LB config
 #
 # Installs Cilium via Helm with L2 announcement and LoadBalancer IP pool
@@ -13,22 +14,8 @@
 #                            [--lb-pool-cidr <cidr>] [--cluster-name <name>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-CILIUM_VERSION="1.16.5"
-LB_POOL_CIDR="${DEV_LB_POOL_CIDR:-192.168.122.208/28}"
-CLUSTER_NAME="hpa-dev"
-WAIT_TIMEOUT="10m"
-HELM_RELEASE_NAME="cilium"
-HELM_NAMESPACE="kube-system"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

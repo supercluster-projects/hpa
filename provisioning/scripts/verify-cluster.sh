@@ -11,18 +11,10 @@
 # via talosctl, then inspects Kubernetes node status. All logging goes
 # to stderr; the final node summary table goes to stdout.
 
-set -euo pipefail
 
 # --- Paths ---
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TALOSCONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/talosconfig"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
 EXPECTED_NODES=4
-
-# --- Helpers ---
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # --- CLI Overrides ---
 while [[ $# -gt 0 ]]; do
@@ -93,6 +85,7 @@ echo "=================================="
 echo ""
 
 # --- Phase 3: Assertions ---
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 FAILED=0
 
 if [ "$TOTAL_COUNT" -ne "$EXPECTED_NODES" ]; then

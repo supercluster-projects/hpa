@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # verify-infisical.sh -- Infisical + Secrets Operator health verification
 #
 # Verifies Infisical backend pod health, service LoadBalancer IP assignment,
@@ -15,18 +16,8 @@
 # Usage: ./verify-infisical.sh [--kubeconfig <path>]
 #                              [--namespace <ns>] [--secrets-op-ns <ns>]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-NAMESPACE="infisical"
-SECRETS_OP_NAMESPACE="infisical-secrets-operator"
-
-# ---- Helpers --------------------------------------------------------------
-log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err()  { log "ERROR: $*"; }
-die()  { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

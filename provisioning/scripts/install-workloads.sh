@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 # install-workloads.sh — Deploy welcome Knative Service + counter SpinApp
 #
 # Deploys the hello-world application workloads on a Kubernetes cluster:
@@ -28,22 +29,8 @@
 #                               [--wait-timeout <duration>]
 #                               [--help]
 # ---------------------------------------------------------------------------
-set -euo pipefail
 
 # ---- Defaults -------------------------------------------------------------
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-KUBECONFIG="${SCRIPT_DIR}/../tofu-libvirt-dev/kubeconfig"
-GITOPS_OVERLAY_PATH="${SCRIPT_DIR}/../../gitops-workloads/functions/overlays/dev"
-GATEWAY_NAMESPACE="envoy-gateway-system"
-GATEWAY_NAME="hpa-dev-gateway"
-HTTPROUTE_NAME="welcome-route"
-WORKLOADS_NAMESPACE="hpa-workloads"
-WAIT_TIMEOUT="10m"
-
-# ---- Helpers --------------------------------------------------------------
-log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-err() { log "ERROR: $*"; }
-die() { err "$*"; exit 1; }
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
