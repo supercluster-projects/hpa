@@ -13,9 +13,10 @@
 set -euo pipefail
 
 # ---- Defaults (matching provisioning variables) ---------------------------
-BRIDGE="${BRIDGE_NAME:-hpa-bridge}"
-CIDR="${CIDR_BLOCK:-192.168.122.0/24}"
-GATEWAY="${GATEWAY:-192.168.122.1}"
+# Reads DEV_* vars first (from .env), falls back to unprefixed vars, then defaults.
+BRIDGE="${DEV_BRIDGE_NAME:-${BRIDGE_NAME:-hpa-bridge}}"
+CIDR="${DEV_CIDR_BLOCK:-${CIDR_BLOCK:-192.168.122.0/24}}"
+GATEWAY="${DEV_GATEWAY:-${GATEWAY:-192.168.122.1}}"
 DHCP_START="${DHCP_START:-.10}"
 DHCP_END="${DHCP_END:-.200}"
 

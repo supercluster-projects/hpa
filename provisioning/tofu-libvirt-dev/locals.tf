@@ -36,6 +36,14 @@ locals {
     }
   }
 
+  # LB pool CIDR: the last /28 of the cluster network for LoadBalancer IPs
+  # Derived from DEV_CIDR_BLOCK so the two never diverge.
+  # cidrsubnet(/24, 4, 13) -> 192.168.122.208/28 (range .208-.223)
+  lb_pool_cidr = cidrsubnet(var.DEV_CIDR_BLOCK, 4, 13)
+  # Suggested Envoy LB IP (2nd usable address in the LB pool, after network .208)
+  # Actual IP is assigned dynamically by Cilium; this is a convenience default.
+  first_lb_ip = cidrhost(local.lb_pool_cidr, 2)
+
   # Base image URL for the Talos metal qcow2 image from the image factory
   # Uses the "zero" schematic (no customization) matching the selected Talos version
   # Schematic ID: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba (official well-known zero schematic)

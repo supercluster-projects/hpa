@@ -37,3 +37,13 @@ output "cluster_endpoint" {
   description = "Kubernetes API endpoint URL"
   value       = local.cluster_endpoint
 }
+
+output "lb_pool_cidr" {
+  description = "Cilium LoadBalancer IP pool CIDR (last /28 of cluster CIDR)"
+  value       = local.lb_pool_cidr
+}
+
+output "first_lb_ip" {
+  description = "Suggested Envoy Gateway LoadBalancer IP (2nd usable in LB pool)"
+  value       = local.first_lb_ip
+}

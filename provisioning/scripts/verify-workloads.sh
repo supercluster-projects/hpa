@@ -67,7 +67,9 @@ Phases:
 
 Options:
   --kubeconfig PATH            Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
-  --envoy-ip IP                Envoy Gateway external IP address for Phase 5
+  --envoy-ip IP                Envoy Gateway external IP for workload verification.
+                               Must be in DEV_LB_POOL_CIDR (.208/28 by default).
+                               Auto-discovered from the gateway if omitted.
   --gateway-namespace NS       Envoy Gateway namespace (default: envoy-gateway-system)
   --gateway-name NAME          Gateway resource name (default: hpa-dev-gateway)
   --workloads-namespace NS     Workloads namespace (default: hpa-workloads)

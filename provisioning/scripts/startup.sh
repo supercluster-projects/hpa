@@ -10,7 +10,8 @@
 #
 # Options:
 #   --kubeconfig PATH   Path to kubeconfig (default: ../tofu-libvirt-dev/kubeconfig)
-#   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected if omitted)
+#   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected if omitted).
+#                       Must be within DEV_LB_POOL_CIDR (.208/28 by default).
 #   --help, -h          Show this help message
 #
 # Environment:
