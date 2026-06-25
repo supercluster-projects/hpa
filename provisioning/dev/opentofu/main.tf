@@ -55,17 +55,17 @@ data "talos_machine_configuration" "worker" {
 # ---------------------------------------------------------------------------
 # Step 2a: Base Talos qcow2 image (downloaded once via URL, never re-downloads)
 # ---------------------------------------------------------------------------
-resource "libvirt_volume" "talos_base" {
-  name = "talos-v1.13.5-base.qcow2"
+resource "libvirt_volume" "talos_iso" {
+  name = "talos-v1.13.5.iso"
   pool = "default"
 
   target = {
-    format = { type = "qcow2" }
+    format = { type = "raw" }
   }
 
   create = {
     content = {
-      url = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
+      url = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.iso"
     }
   }
 
@@ -77,7 +77,7 @@ resource "libvirt_volume" "talos_base" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 3: OS disk volumes (one per node, qcow2 overlay on base, copy-on-write)
+# Step 2b: OS disk volumes (one per node, blank qcow2 for Talos to install onto)
 # ---------------------------------------------------------------------------
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
@@ -85,11 +85,6 @@ resource "libvirt_volume" "os_disk" {
   name     = "${each.key}-os.qcow2"
   pool     = "default"
   capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
-
-  backing_store = {
-    path   = libvirt_volume.talos_base.path
-    format = { type = "qcow2" }
-  }
 
   target = {
     format = { type = "qcow2" }
@@ -133,8 +128,7 @@ resource "libvirt_domain" "node" {
     type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
-    firmware     = "efi"
-    boot_devices = [{ dev = "hd" }]
+    boot_devices = [{ dev = "cdrom" }, { dev = "hd" }]
   }
 
   cpu = {
@@ -157,6 +151,22 @@ resource "libvirt_domain" "node" {
           }
           driver = {
             type = "qcow2"
+          }
+        },
+        # Talos ISO — first boot: live mode, apply-config installs to vda
+        {
+          source = {
+            volume = {
+              pool   = "default"
+              volume = libvirt_volume.talos_iso.name
+            }
+          }
+          target = {
+            dev = "sda"
+            bus = "sata"
+          }
+          driver = {
+            type = "raw"
           }
         },
       ],
