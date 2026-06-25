@@ -428,6 +428,6 @@ gitops-workloads/
     ├── kustomization.yaml
     ├── functions/welcome.yaml         # Welcome Knative Service
     ├── spins/counter.yaml              # Counter SpinApp
-    ├── infisical-secret.yaml    # Infisical-managed secrets
+    ├── secrets.yaml               # Infisical-managed secrets
     └── ...
 ```

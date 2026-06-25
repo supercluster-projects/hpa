@@ -6,4 +6,4 @@ namespace: hpa-workloads
 resources:
   - functions
   - spins
-  - infisical-secret.yaml
+  - secrets.yaml
