@@ -53,7 +53,31 @@ data "talos_machine_configuration" "worker" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 3: OS disk volumes (one per node, qcow2, downloaded from Talos image factory)
+# Step 2a: Base Talos qcow2 image (downloaded once via URL, never re-downloads)
+# ---------------------------------------------------------------------------
+resource "libvirt_volume" "talos_base" {
+  name = "talos-v1.13.5-base.qcow2"
+  pool = "default"
+
+  target = {
+    format = { type = "qcow2" }
+  }
+
+  create = {
+    content = {
+      url = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [
+      create[0].content[0].url,
+    ]
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Step 3: OS disk volumes (one per node, qcow2 overlay on base, copy-on-write)
 # ---------------------------------------------------------------------------
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
@@ -62,14 +86,13 @@ resource "libvirt_volume" "os_disk" {
   pool     = "default"
   capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
 
-  target = {
+  backing_store = {
+    path   = libvirt_volume.talos_base.path
     format = { type = "qcow2" }
   }
 
-  create = {
-    content = {
-      url = local.iso_url
-    }
+  target = {
+    format = { type = "qcow2" }
   }
 }
 
@@ -163,14 +186,9 @@ resource "libvirt_domain" "node" {
           }
         }
         model = { type = "virtio" }
-      },
-      {
-        source = {
-          bridge = {
-            bridge = var.DEV_BRIDGE_NAME
-          }
+        mac = {
+          address = local.node_macs[each.key]
         }
-        model = { type = "virtio" }
       },
     ]
 
@@ -209,7 +227,7 @@ resource "talos_machine_configuration_apply" "node" {
           nameservers = local.dns_servers
           interfaces = [
             {
-              interface = "bond0"
+              interface = "eth0"
               addresses = ["${each.value.ip}/${split("/", var.DEV_CIDR_BLOCK)[1]}"]
               routes = [
                 {

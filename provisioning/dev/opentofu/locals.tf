@@ -48,6 +48,14 @@ locals {
   # Actual IP is assigned dynamically by Cilium; this is a convenience default.
   first_lb_ip = cidrhost(local.lb_pool_cidr, 2)
 
+  # Deterministic MAC addresses matching static DHCP host entries in hpa-bridge
+  # Format: 52:54:00:fd:00:<last-octet-hex>
+  # Required so Talos gets the expected IP from DHCP on first boot,
+  # enabling talos_machine_configuration_apply to connect.
+  node_macs = {
+    for name, info in local.node_apply : name => format("52:54:00:fd:00:%02x", split(".", info.ip)[3])
+  }
+
   # Base image URL for the Talos metal qcow2 image from the image factory
   # Uses the "zero" schematic (no customization) matching the selected Talos version
   # Schematic ID: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba (official well-known zero schematic)

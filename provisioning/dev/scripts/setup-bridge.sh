@@ -30,6 +30,21 @@ GATEWAY="${CIDR%.*}.1"
 DHCP_START="${DHCP_START:-${CIDR%.*}.10}"
 DHCP_END="${DHCP_END:-${CIDR%.*}.200}"
 
+# ---- Static DHCP host entries (from DEV_ prefix env vars) ----------------
+# Deterministic MAC addresses derived from IP last octet.
+# Format: DEV_NODE_HOSTS="hpa-node-cp-0:52:54:00:fd:00:64 hpa-node-worker-0:52:54:00:fd:00:6e ..."
+# Auto-generated from DEV_NODE_PREFIX, DEV_CP_COUNT, DEV_WORKER_COUNT and DEV_CIDR_BLOCK
+DHCP_HOSTS=()
+gen_mac() { local ip="$1"; local last=$(echo "$ip" | awk -F. '{print $4}'); printf "52:54:00:fd:%02x:%02x" $((last >> 8)) $((last & 0xff)); }
+for i in $(seq 0 $((DEV_CP_COUNT - 1))); do
+  IP="${CIDR%.*}.$((100 + i))"
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-cp-${i}:$(gen_mac $IP):$IP")
+done
+for i in $(seq 0 $((DEV_WORKER_COUNT - 1))); do
+  IP="${CIDR%.*}.$((110 + i))"
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-worker-${i}:$(gen_mac $IP):$IP")
+done
+
 # ---- Parse CLI overrides --------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
