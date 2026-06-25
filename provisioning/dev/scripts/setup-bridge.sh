@@ -14,7 +14,7 @@ set -euo pipefail
 
 # Source .env directly (no preamble since this runs before cluster exists).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="$(cd "${SCRIPT_DIR}/../.." && pwd)/.env"
+ENV_FILE="$(cd "${SCRIPT_DIR}/../../.." && pwd)/.env"
 if [ -f "${ENV_FILE}" ]; then
   set -a; source "${ENV_FILE}"; set +a
 fi

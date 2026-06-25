@@ -27,14 +27,10 @@
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
-PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 KEEP_CHARTS=false
 CHART_DIR=""
 
-# ---- Required environment variables (fail fast if missing from .env) ---
-
 # ---- Internal defaults (script-internal only) -------------------------
-KEEP_CHARTS=false
 CHART_DIR=""
 
 # ---- CLI Overrides --------------------------------------------------------

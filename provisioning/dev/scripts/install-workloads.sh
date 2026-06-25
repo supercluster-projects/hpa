@@ -73,7 +73,7 @@ Steps:
 
 Options:
   --kubeconfig PATH              Path to kubeconfig (default: ../opentofu/kubeconfig)
-  --gitops-overlay-path PATH     Kustomize overlay directory (default: ../../gitops-workloads/functions/overlays/dev)
+  --gitops-overlay-path PATH     Kustomize overlay directory (default: ../../../gitops-workloads/functions/overlays/dev)
   --gateway-namespace NS         Envoy Gateway namespace (default: envoy-gateway-system)
   --gateway-name NAME            Gateway resource name (default: hpa-dev-gateway)
   --httproute-name NAME          HTTPRoute name for /api/welcome (default: welcome-route)
