@@ -52,5 +52,5 @@ locals {
   # Uses the "zero" schematic (no customization) matching the selected Talos version
   # Schematic ID: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba (official well-known zero schematic)
   talos_schematic_id = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
-  iso_url            = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.DEV_TALOS_VERSION}/metal-amd64.qcow2"
+  iso_url            = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
 }

@@ -88,13 +88,13 @@ variable "DEV_BRIDGE_NAME" {
   }
 }
 
-variable "DEV_TALOS_VERSION" {
+variable "TALOS_VERSION" {
   description = "Talos version to install (e.g. v1.13.5)"
   type        = string
 
   validation {
-    condition     = can(regex("^v\\d+\\.\\d+\\.\\d+", var.DEV_TALOS_VERSION))
-    error_message = "Talos version must start with 'v' followed by semver (e.g. v1.13.5)."
+    condition     = can(regex("^v\\d+\\.\\d+\\.\\d+", var.TALOS_VERSION))
+    error_message = "TALOS_VERSION must start with 'v' followed by semver (e.g. v1.13.5)."
   }
 }
 

@@ -15,7 +15,7 @@ run "test_vm_naming_convention" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -55,7 +55,7 @@ run "test_cluster_endpoint_and_cidr" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -100,7 +100,7 @@ run "test_iso_url_format" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -112,7 +112,7 @@ run "test_iso_url_format" {
   }
 
   assert {
-    condition     = can(regex("/${var.DEV_TALOS_VERSION}/metal-amd64\\.qcow2$", local.iso_url))
+    condition     = can(regex("/${var.TALOS_VERSION}/metal-amd64\\.qcow2$", local.iso_url))
     error_message = "ISO URL '${local.iso_url}' does not end with expected version and qcow2 path"
   }
 }
@@ -130,7 +130,7 @@ run "test_node_count_output" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -155,7 +155,7 @@ run "test_negative_disk_size_fails_validation" {
     DEV_OS_DISK_SIZE_GB         = -5
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -179,7 +179,7 @@ run "test_empty_bridge_name_fails_validation" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = ""
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
@@ -203,14 +203,14 @@ run "test_invalid_talos_version_fails_validation" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "1.0.0"
+    TALOS_VERSION               = "1.0.0"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
   }
 
   expect_failures = [
-    var.DEV_TALOS_VERSION,
+    var.TALOS_VERSION,
   ]
 }
 
@@ -227,7 +227,7 @@ run "test_node_prefix_with_uppercase_fails_validation" {
     DEV_OS_DISK_SIZE_GB         = 20
     DEV_CEPH_DISK_SIZE_GB       = 20
     DEV_BRIDGE_NAME             = "hpa-bridge"
-    DEV_TALOS_VERSION           = "v1.13.5"
+    TALOS_VERSION               = "v1.13.5"
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "Hpa-Node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
