@@ -1,0 +1,23 @@
+apiVersion: serving.knative.dev/v1
+kind: Service
+metadata:
+  name: welcome
+  namespace: hpa-workloads
+spec:
+  template:
+    metadata:
+      annotations:
+        autoscaling.knative.dev/min-scale: "1"
+        autoscaling.knative.dev/max-scale: "10"
+    spec:
+      containers:
+        - image: harbor.harbor.svc.cluster.local/library/hpa-workloads/welcome:latest
+          ports:
+            - containerPort: 8080
+          env:
+            - name: COUNTER_ADDR
+              value: "http://counter.hpa-workloads.svc.cluster.local:8080"
+          envFrom:
+            - secretRef:
+                name: welcome-infisical-secrets
+                optional: true

@@ -1,0 +1,22 @@
+#:schema https://schemas.spinframework.dev/spin/manifest-v2/latest.json
+
+spin_manifest_version = 2
+
+[application]
+name = "counter"
+version = "0.1.0"
+authors = ["Vladimir Cores <vladimir.cores@gmail.com>"]
+description = "Increments a KeyDB counter (counter-welcome) on each request and returns the new value"
+
+[[trigger.http]]
+route = "/"
+component = "counter"
+
+[component.counter]
+source = "target/wasm32-wasip1/release/counter.wasm"
+allowed_outbound_hosts = ["redis://keydb.keydb.svc.cluster.local:6379"]
+environment = { KEYDB_URL = "redis://keydb.keydb.svc.cluster.local:6379/" }
+
+[component.counter.build]
+command = "cargo build --target wasm32-wasip1 --release"
+watch = ["src/**/*.rs", "Cargo.toml"]

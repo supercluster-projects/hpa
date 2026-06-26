@@ -1,0 +1,16 @@
+[package]
+name = "counter"
+authors = ["Vladimir Cores <vladimir.cores@gmail.com>"]
+description = "Spin WASM component that increments a KeyDB counter and returns the new value"
+version = "0.1.0"
+rust-version = "1.78"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow = "1"
+spin-sdk = { version = "6.0.0", features = ["redis"] }
+
+[workspace]

@@ -1,0 +1,33 @@
+openapi: "3.0.3"
+info:
+  title: HPA Backend API
+  description: High-Performance Application Platform public API
+  version: "1.0.0"
+servers:
+  - url: /
+    description: Relative path — routes are handled by Envoy Gateway
+paths:
+  /api/welcome:
+    get:
+      summary: Welcome endpoint with incrementing counter
+      description: >
+        Returns "Welcome (N)" where N is an incrementing counter value managed
+        by the backing counter service. Each call to this endpoint increments
+        the counter and returns the new value.
+      operationId: getWelcome
+      responses:
+        "200":
+          description: Successful response with incrementing welcome count
+          content:
+            text/plain:
+              schema:
+                type: string
+                pattern: "^Welcome \\(\\d+\\)$"
+                example: "Welcome (1)"
+        "502":
+          description: Counter service unreachable or returned an error
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "counter error: connection refused"

@@ -55,7 +55,7 @@ This repository contains your cluster building blocks and environment configurat
 `│   ├── clickhouse/                    # High-load telemetry platform`  
 `│   └── databases/                     # OLTP (yugabytedb, couchdb, keydb, arcadedb)`  
 `└── provisioning/                      # Bare-Metal Bare-VM Orchestration`  
-    `├── tofu-libvirt-dev/              # Local dev profile configurations`  
+    `├── dev/opentofu/              # Local dev OpenTofu provisioning`  
     `│   ├── main.tf`  
     `│   └── variables.tf`  
     `└── tofu-libvirt-staging/          # Remote staging execution profile`  

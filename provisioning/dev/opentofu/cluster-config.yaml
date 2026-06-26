@@ -1,0 +1,35 @@
+# Talos machine configuration patches for the hpa-dev cluster
+# Applied to both controlplane and worker machine configurations.
+#
+# These patches customize disk layout for the libvirt/bridge-based
+# dev environment on hpa-bridge. Per-node networking (hostname, IP,
+# bonding) is applied at the talos_machine_configuration_apply step.
+---
+machine:
+  install:
+    # Install Talos to the first virtio disk (OS disk, /dev/vda in libvirt)
+    disk: /dev/vda
+    # Disable predictable network interface naming so interfaces appear as
+    # eth0/eth1 rather than enpXsY; required for consistent bond device naming
+    extraKernelArgs:
+      - net.ifnames=0
+  # Expose /dev/vdb as an unused raw block device for Ceph OSDs.
+  # Talos will not format or mount it; Ceph claims it directly.
+  disks:
+    - device: /dev/vdb
+# Spegel mirror configuration (commented — enable for distributed image mirroring)
+# Spegel provides OCI image mirroring between cluster nodes, reducing
+# registry pull load and improving node startup time.
+#
+# To enable:
+#   1. Uncomment the block below
+#   2. Ensure spegel: v0.0.28+ is compatible with the Talos version
+#   3. Verify mirror endpoints resolve correctly on the cluster network
+#
+# cluster:
+#   spegel:
+#     enabled: true
+#     mirror:
+#       docker.io:
+#         endpoints:
+#           - http://localhost:5000
