@@ -2,9 +2,9 @@
 #
 # Covers the full bootstrap lifecycle:
 #   1. Generate machine secrets (TLS + token)
-#   2. Create OS disk volumes (qcow2 from Talos image factory)
+#   2. Create OS disk volumes (blank qcow2 for Talos to install onto)
 #   3. Create raw empty Ceph disk volumes for worker nodes
-#   4. Define libvirt domains (VMs) with OS + ceph disks
+#   4. Define libvirt domains (VMs) with OS + ceph disks + ISO
 #   5. Generate Talos machine configurations (controlplane + worker)
 #   6. Apply configurations to each node
 #   7. Bootstrap the first control plane node
@@ -27,9 +27,6 @@ data "talos_client_configuration" "this" {
 # ---------------------------------------------------------------------------
 # Step 2b: Talos machine configuration data sources (controlplane + worker)
 # ---------------------------------------------------------------------------
-# These generate the base machine configuration YAML from shared patches
-# (cluster-config.yaml). Per-node patches (hostname, static IP) are applied
-# at the talos_machine_configuration_apply step.
 data "talos_machine_configuration" "controlplane" {
   cluster_name     = var.DEV_CLUSTER_NAME
   machine_type     = "controlplane"
@@ -53,31 +50,31 @@ data "talos_machine_configuration" "worker" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 2a: Base Talos qcow2 image (downloaded once via URL, never re-downloads)
+# Step 2c: Base Talos ISO download (download once to local disk)
 # ---------------------------------------------------------------------------
-resource "libvirt_volume" "talos_iso" {
-  name = "talos-v1.13.5.iso"
-  pool = "default"
-
-  target = {
-    format = { type = "raw" }
+resource "null_resource" "download_talos_iso" {
+  triggers = {
+    version = var.TALOS_VERSION
   }
 
-  create = {
-    content = {
-      url = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.iso"
-    }
-  }
-
-  lifecycle {
-    ignore_changes = [
-      create[0].content[0].url,
-    ]
+  provisioner "local-exec" {
+    command = <<-CMD
+      ISO="/var/lib/libvirt/images/talos-v1.13.5.iso"
+      if [ ! -f "$ISO" ]; then
+        echo "Downloading Talos ISO (320 MB)..."
+        curl -Lo "$ISO" "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.iso"
+        chmod 644 "$ISO"
+        restorecon "$ISO" 2>/dev/null || true
+        echo "Download complete."
+      else
+        echo "Talos ISO already cached."
+      fi
+CMD
   }
 }
 
 # ---------------------------------------------------------------------------
-# Step 2b: OS disk volumes (one per node, blank qcow2 for Talos to install onto)
+# Step 2d: OS disk volumes (one per node, blank qcow2 for Talos to install onto)
 # ---------------------------------------------------------------------------
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
@@ -92,7 +89,7 @@ resource "libvirt_volume" "os_disk" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 4: Ceph disk volumes (one per worker node, raw, empty)
+# Step 3: Ceph disk volumes (one per worker node, raw, empty)
 # ---------------------------------------------------------------------------
 resource "libvirt_volume" "ceph_disk" {
   for_each = toset(local.worker_node_names)
@@ -107,12 +104,13 @@ resource "libvirt_volume" "ceph_disk" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 5: Libvirt domains (VMs)
+# Step 4: Libvirt domains (VMs)
 # ---------------------------------------------------------------------------
 # Each VM gets:
-#   - OS disk on /dev/vda (virtio bus, qcow2 from Talos metal image)
+#   - OS disk on /dev/vda (virtio bus, blank qcow2)
 #   - Workers also get a ceph disk on /dev/vdb (virtio bus, raw)
 #   - One virtio network interface on hpa-bridge (static DHCP lease)
+#   - Talos ISO on SATA CDROM (first boot only — Talos live mode)
 resource "libvirt_domain" "node" {
   for_each = local.node_apply
 
@@ -153,12 +151,11 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         },
-        # Talos ISO — first boot: live mode, apply-config installs to vda
+        # Talos ISO — first boot: live mode enables apply-config to install to vda
         {
           source = {
-            volume = {
-              pool   = "default"
-              volume = libvirt_volume.talos_iso.name
+            file = {
+              file = "/var/lib/libvirt/images/talos-v1.13.5.iso"
             }
           }
           target = {
@@ -215,12 +212,18 @@ resource "libvirt_domain" "node" {
     # the graphics element vanishes on read-back, causing apply failure.
     # VMs are headless (provisioned via serial console / talosctl).
   }
+
+  depends_on = [
+    null_resource.download_talos_iso,
+  ]
 }
 
 # ---------------------------------------------------------------------------
-# Step 6: Apply Talos machine configuration to each node
+# Step 5: Apply Talos machine configuration to each node
 # ---------------------------------------------------------------------------
-# Per-node patches set the hostname, static IP on bond0, gateway, and DNS.
+# Per-node patches set the hostname and static IP on eth0.
+# Talos boots from ISO, receives config via talosctl, installs to disk,
+# and reboots with the static IP from the machine config.
 resource "talos_machine_configuration_apply" "node" {
   for_each = local.node_apply
 
@@ -255,6 +258,7 @@ resource "talos_machine_configuration_apply" "node" {
 
   depends_on = [
     libvirt_domain.node,
+    null_resource.download_talos_iso,
   ]
 
   timeouts = {
@@ -263,9 +267,8 @@ resource "talos_machine_configuration_apply" "node" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 7: Bootstrap the first control plane node
+# Step 6: Bootstrap the first control plane node
 # ---------------------------------------------------------------------------
-# Waits for all machine configuration applies to succeed before bootstrapping.
 resource "talos_machine_bootstrap" "this" {
   node                 = local.cp_ips[0]
   endpoint             = local.cp_ips[0]
@@ -281,7 +284,7 @@ resource "talos_machine_bootstrap" "this" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 8: Retrieve cluster kubeconfig
+# Step 7: Retrieve cluster kubeconfig
 # ---------------------------------------------------------------------------
 resource "talos_cluster_kubeconfig" "this" {
   node                 = local.cp_ips[0]

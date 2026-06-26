@@ -10,5 +10,9 @@ terraform {
       source  = "registry.opentofu.org/siderolabs/talos"
       version = "~> 0.6"
     }
+    null = {
+      source  = "registry.opentofu.org/hashicorp/null"
+      version = ">= 3.0"
+    }
   }
 }
