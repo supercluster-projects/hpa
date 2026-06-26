@@ -78,12 +78,14 @@ Pipeline steps:
   4. Install Harbor
   5. Install Infisical
   6. Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)
-  7. Install Casdoor OIDC Provider
-  8. Install Casbin gRPC Authorizer
-  9. Install Envoy Gateway + Headlamp
-  10. Install SecurityPolicy (Casbin extAuth + Casdoor OIDC)
-  11. Install GitOps (Kargo + ArgoCD)
-  12. Deploy Workloads (Welcome + Counter)
+  7. Install Kafka (Strimzi Operator + Cluster)
+  8. Install Spegel P2P OCI Registry Mirror
+  9. Install Casdoor OIDC Provider
+  10. Install Casbin gRPC Authorizer
+  11. Install Envoy Gateway + Headlamp
+  12. Install SecurityPolicy (Casbin extAuth + Casdoor OIDC)
+  13. Install GitOps (Kargo + ArgoCD)
+  14. Deploy Workloads (Welcome + Counter)
 
 Environment:
   .env file at project root sourced automatically
@@ -216,7 +218,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=13
+TOTAL_STEPS=16
 
 # Step 0 (tofu) is already done above
 
@@ -227,18 +229,24 @@ step 4 "Install Harbor"             ./install-harbor.sh
 step 5 "Install Infisical"          ./install-infisical.sh
 step 6 "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)" \
                                      ./install-runtimes.sh
-step 7 "Install Casdoor OIDC Provider" \
+step 7 "Install Kafka (Strimzi Operator + Cluster)" \
+                                     ./install-kafka.sh
+step 8 "Install Spegel P2P OCI Registry Mirror" \
+                                     ./install-spegel.sh
+step 9 "Install Casdoor OIDC Provider" \
                                      ./install-casdoor.sh
-step 8 "Install Casbin gRPC Authorizer" \
+step 10 "Install Casbin gRPC Authorizer" \
                                      ./install-casbin.sh
-step 9 "Install Envoy Gateway + Headlamp" \
+step 11 "Install Envoy Gateway + Headlamp" \
                                      ./install-gateway.sh
-step 10 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
+step 12 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
                                      ./install-security-policy.sh
-step 11 "Install GitOps (Kargo + ArgoCD)" \
+step 13 "Install GitOps (Kargo + ArgoCD)" \
                                      ./install-gitops.sh
-step 12 "Deploy Workloads (Welcome + Counter)" \
+step 14 "Deploy Workloads (Welcome + Counter)" \
                                      ./install-workloads.sh
+step 15 "Install Streaming Workload (Stream-Processor)" \
+                                     ./install-streaming-workload.sh
 
 # ---- Run verification scripts ---------------------------------------------
 log ""
@@ -250,8 +258,8 @@ bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreacha
 
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-runtimes.sh verify-casdoor.sh \
-                     verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
+                     verify-infisical.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
+                     verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
 done
@@ -260,9 +268,15 @@ done
 if [ -z "${ENVOY_IP}" ]; then
   log "--- verify-workloads.sh (auto-discover Envoy IP) ---"
   bash ./verify-workloads.sh 2>&1 || log "  (non-fatal) Workload verification may need Envoy IP"
+
+  log "--- verify-streaming-workload.sh ---"
+  bash ./verify-streaming-workload.sh --disable-prodcons-test 2>&1 || log "  (non-fatal) Streaming workload verification may need cluster"
 else
   log "--- verify-workloads.sh (Envoy IP: ${ENVOY_IP}) ---"
   bash ./verify-workloads.sh --envoy-ip "${ENVOY_IP}" 2>&1 || log "  (non-fatal) Some workload checks may need more time"
+
+  log "--- verify-streaming-workload.sh (Envoy IP: ${ENVOY_IP}) ---"
+  bash ./verify-streaming-workload.sh 2>&1 || log "  (non-fatal) Streaming workload verification may need more time"
 fi
 
 # ---- Summary --------------------------------------------------------------
