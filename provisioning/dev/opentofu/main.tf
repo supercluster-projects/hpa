@@ -2,9 +2,9 @@
 #
 # Covers the full bootstrap lifecycle:
 #   1. Generate machine secrets (TLS + token)
-#   2. Create OS disk volumes (blank qcow2 for Talos to install onto)
+#   2. Create OS disk volumes (COW clones of pre-installed Talos qcow2)
 #   3. Create raw empty Ceph disk volumes for worker nodes
-#   4. Define libvirt domains (VMs) with OS + ceph disks + ISO
+#   4. Define libvirt domains (VMs) with OS + ceph disks
 #   5. Generate Talos machine configurations (controlplane + worker)
 #   6. Apply configurations to each node
 #   7. Bootstrap the first control plane node
@@ -50,41 +50,40 @@ data "talos_machine_configuration" "worker" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 2c: Base Talos ISO download (download once to local disk)
+# Step 2c: Base Talos qcow2 volume (downloads and imports from image factory)
 # ---------------------------------------------------------------------------
-resource "null_resource" "download_talos_iso" {
-  triggers = {
-    version = var.TALOS_VERSION
-  }
+# Downloads the Talos metal qcow2 image from the image factory as a managed
+# libvirt volume. This pre-installed image serves as the read-only backing
+# store for per-node OS disk COW clones, eliminating the ISO boot +
+# install-to-disk cycle.
+resource "libvirt_volume" "talos_base" {
+  name = "talos-base.qcow2"
+  pool = "default"
 
-  provisioner "local-exec" {
-    command = <<-CMD
-      ISO="/var/lib/libvirt/images/talos-v1.13.5.iso"
-      if [ ! -f "$ISO" ]; then
-        echo "Downloading Talos ISO (320 MB)..."
-        curl -Lo "$ISO" "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.iso"
-        chmod 644 "$ISO"
-        restorecon "$ISO" 2>/dev/null || true
-        echo "Download complete."
-      else
-        echo "Talos ISO already cached."
-      fi
-CMD
+  create = {
+    content = {
+      url = local.qcow2_url
+    }
   }
 }
 
 # ---------------------------------------------------------------------------
-# Step 2d: OS disk volumes (one per node, blank qcow2 for Talos to install onto)
+# Step 2d: OS disk volumes (COW clones of the Talos base qcow2, one per node)
 # ---------------------------------------------------------------------------
+# Each OS disk is a qcow2 COW clone of the pre-installed Talos base image.
+# The backing_store references the base volume so writes go to the clone,
+# keeping the base image pristine and saving disk space.
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
 
-  name     = "${each.key}-os.qcow2"
-  pool     = "default"
-  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+  name = "${each.key}-os.qcow2"
+  pool = "default"
 
-  target = {
-    format = { type = "qcow2" }
+  backing_store = {
+    path = libvirt_volume.talos_base.path
+    format = {
+      type = "qcow2"
+    }
   }
 }
 
@@ -107,10 +106,10 @@ resource "libvirt_volume" "ceph_disk" {
 # Step 4: Libvirt domains (VMs)
 # ---------------------------------------------------------------------------
 # Each VM gets:
-#   - OS disk on /dev/vda (virtio bus, blank qcow2)
+#   - OS disk on /dev/vda (virtio bus, COW clone of pre-installed Talos qcow2)
 #   - Workers also get a ceph disk on /dev/vdb (virtio bus, raw)
 #   - One virtio network interface on hpa-bridge (static DHCP lease)
-#   - Talos ISO on SATA CDROM (first boot only — Talos live mode)
+#   - OS disk backed by the pre-installed Talos qcow2 (Talos running on boot)
 resource "libvirt_domain" "node" {
   for_each = local.node_apply
 
@@ -126,7 +125,7 @@ resource "libvirt_domain" "node" {
     type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
-    boot_devices = [{ dev = "cdrom" }, { dev = "hd" }]
+    boot_devices = [{ dev = "hd" }]
   }
 
   cpu = {
@@ -151,21 +150,7 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         },
-        # Talos ISO — first boot: live mode enables apply-config to install to vda
-        {
-          source = {
-            file = {
-              file = "/var/lib/libvirt/images/talos-v1.13.5.iso"
-            }
-          }
-          target = {
-            dev = "sda"
-            bus = "sata"
-          }
-          driver = {
-            type = "raw"
-          }
-        },
+
       ],
       each.value.type == "worker" ? [
         {
@@ -213,17 +198,14 @@ resource "libvirt_domain" "node" {
     # VMs are headless (provisioned via serial console / talosctl).
   }
 
-  depends_on = [
-    null_resource.download_talos_iso,
-  ]
 }
 
 # ---------------------------------------------------------------------------
 # Step 5: Apply Talos machine configuration to each node
 # ---------------------------------------------------------------------------
 # Per-node patches set the hostname and static IP on eth0.
-# Talos boots from ISO, receives config via talosctl, installs to disk,
-# and reboots with the static IP from the machine config.
+# Talos boots from the pre-installed disk image, receives config via
+# talosctl, and reboots with the static IP from the machine config.
 resource "talos_machine_configuration_apply" "node" {
   for_each = local.node_apply
 
@@ -258,7 +240,6 @@ resource "talos_machine_configuration_apply" "node" {
 
   depends_on = [
     libvirt_domain.node,
-    null_resource.download_talos_iso,
   ]
 
   timeouts = {
