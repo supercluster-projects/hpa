@@ -261,6 +261,9 @@ kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/functions/overlays/dev" 
 kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/authorizers/casbin-ext-authz/base" \
   "Kustomize: gitops-workloads/authorizers/casbin-ext-authz/base" \
   "gitops-workloads/authorizers/casbin-ext-authz/base"
+kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/security/base" \
+  "Kustomize: gitops-workloads/security/base" \
+  "gitops-workloads/security/base"
 
 # ============================================================================
 # Shell syntax check (bash -n) for all scripts
