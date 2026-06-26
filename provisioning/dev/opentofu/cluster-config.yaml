@@ -17,19 +17,22 @@ machine:
   # Talos will not format or mount it; Ceph claims it directly.
   disks:
     - device: /dev/vdb
-# Spegel mirror configuration (commented — enable for distributed image mirroring)
+# Spegel mirror configuration — enable for distributed image mirroring
 # Spegel provides OCI image mirroring between cluster nodes, reducing
 # registry pull load and improving node startup time.
 #
 # To enable:
-#   1. Uncomment the block below
-#   2. Ensure spegel: v0.0.28+ is compatible with the Talos version
-#   3. Verify mirror endpoints resolve correctly on the cluster network
+#   1. Uncomment the 'machine.files' block below
+#   2. Ensure SPEGEL_VERSION is set in .env (compatible with Talos v1.13+)
+#   3. Run provisioning/dev/scripts/install-spegel.sh
 #
-# cluster:
-#   spegel:
-#     enabled: true
-#     mirror:
-#       docker.io:
-#         endpoints:
-#           - http://localhost:5000
+# This patch disables discard_unpacked_layers which is enabled by default
+# in Talos. Spegel requires layers to remain on disk for peer serving.
+#
+# machine:
+#   files:
+#     - path: /etc/cri/conf.d/20-customization.part
+#       op: create
+#       content: |
+#         [plugins."io.containerd.cri.v1.images"]
+#           discard_unpacked_layers = false
