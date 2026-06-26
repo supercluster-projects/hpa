@@ -11,7 +11,7 @@ terraform {
       version = "~> 0.6"
     }
     null = {
-      source  = "registry.opentofu.org/hashicorp/null"
+      source  = "registry.terraform.io/hashicorp/null"
       version = ">= 3.0"
     }
   }

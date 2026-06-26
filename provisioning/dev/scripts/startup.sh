@@ -165,8 +165,6 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   }
 
   log "tofu apply completed successfully."
-
-  log "tofu apply completed successfully."
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
   log "kubeconfig already exists — skipping tofu apply."
 else
