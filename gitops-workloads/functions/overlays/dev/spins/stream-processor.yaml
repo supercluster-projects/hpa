@@ -1,0 +1,11 @@
+apiVersion: core.spinoperator.dev/v1alpha1
+kind: SpinApp
+metadata:
+  name: stream-processor
+  namespace: hpa-workloads
+spec:
+  image: harbor.harbor.svc.cluster.local/library/hpa-workloads/stream-processor:latest
+  replicas: 1
+  executor: default
+  environment:
+    KEYDB_URL: "redis://keydb.keydb.svc.cluster.local:6379/"
