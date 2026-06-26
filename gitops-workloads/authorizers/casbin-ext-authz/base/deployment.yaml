@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: casbin-ext-authz
+  namespace: casbin
+  labels:
+    app: casbin-ext-authz
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: casbin-ext-authz
+  template:
+    metadata:
+      labels:
+        app: casbin-ext-authz
+    spec:
+      containers:
+        - name: casbin-ext-authz
+          image: harbor.harbor.svc.cluster.local/library/hpa-workloads/casbin-ext-authz:latest
+          command:
+            - /casbin-ext-authz
+            - -model
+            - /etc/casbin/casbin_model.conf
+            - -policy
+            - /etc/casbin/casbin_policy.csv
+          ports:
+            - containerPort: 9001
+              name: grpc
+              protocol: TCP
+          volumeMounts:
+            - name: casbin-config
+              mountPath: /etc/casbin
+          envFrom:
+            - secretRef:
+                name: casbin-infisical-secrets
+                optional: true
+          resources:
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+      volumes:
+        - name: casbin-config
+          configMap:
+            name: casbin-config

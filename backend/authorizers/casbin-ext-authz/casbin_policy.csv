@@ -1,0 +1,17 @@
+p, admin, /api/*, GET
+p, admin, /api/*, POST
+p, admin, /api/*, PUT
+p, admin, /api/*, DELETE
+p, admin, /api/*, PATCH
+p, admin, /api/admin/*, GET
+p, admin, /api/admin/*, POST
+p, admin, /api/admin/*, DELETE
+p, user, /api/public/*, GET
+p, user, /api/user/*, GET
+p, user, /api/user/*, POST
+p, user, /api/user/*, PUT
+p, viewer, /api/public/*, GET
+
+g, alice, admin
+g, bob, user
+g, charlie, viewer

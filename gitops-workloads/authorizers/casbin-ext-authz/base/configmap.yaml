@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: casbin-config
+  namespace: casbin
+data:
+  casbin_model.conf: |
+    [request_definition]
+    r = sub, obj, act
+
+    [policy_definition]
+    p = sub, obj, act
+
+    [role_definition]
+    g = _, _
+
+    [policy_effect]
+    e = some(where (p.eft == allow))
+
+    [matchers]
+    m = g(r.sub, p.sub) && keyMatch(r.obj, p.obj) && keyMatch(r.act, p.act)
+  casbin_policy.csv: |
+    p, admin, /api/*, GET
+    p, admin, /api/*, POST
+    p, admin, /api/*, PUT
+    p, admin, /api/*, DELETE
+    p, admin, /api/*, PATCH
+    p, admin, /api/admin/*, GET
+    p, admin, /api/admin/*, POST
+    p, admin, /api/admin/*, DELETE
+    p, user, /api/public/*, GET
+    p, user, /api/user/*, GET
+    p, user, /api/user/*, POST
+    p, user, /api/user/*, PUT
+    p, viewer, /api/public/*, GET
+
+    g, alice, admin
+    g, bob, user
+    g, charlie, viewer

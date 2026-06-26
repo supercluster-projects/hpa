@@ -245,9 +245,11 @@ helm_lint_repo "https://kubernetes-sigs.github.io/headlamp/" "headlamp" "0.16.0"
 helm_lint_repo "https://argoproj.github.io/argo-helm" "argo-cd" "7.8.0" "ArgoCD v7.8.0"
 helm_lint_repo "https://dl.infisical.com/helm-charts" "infisical" "" "Infisical (latest)"
 helm_lint_repo "https://kargo.akuity.io/charts" "kargo" "1.3.0" "Kargo v1.3.0"
+helm_lint_repo "https://charts.bitnami.com/bitnami" "postgresql" "" "Bitnami PostgreSQL (latest)"
 
 log "--- Helm Lint Checks (OCI Charts) ---"
 helm_lint_oci "docker.io/envoyproxy/gateway-helm" "v1.2.2" "Envoy Gateway v1.2.2 (OCI)"
+helm_lint_oci "registry-1.docker.io/casbin/casdoor-helm-charts" "3.100.0" "Casdoor v3.100.0 (OCI)"
 
 # ============================================================================
 # Kustomize Build Checks
@@ -256,6 +258,12 @@ log "--- Kustomize Build Checks ---"
 kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/functions/overlays/dev" \
   "Kustomize: gitops-workloads/functions/overlays/dev" \
   "gitops-workloads/functions/overlays/dev"
+kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/authorizers/casbin-ext-authz/base" \
+  "Kustomize: gitops-workloads/authorizers/casbin-ext-authz/base" \
+  "gitops-workloads/authorizers/casbin-ext-authz/base"
+kustomize_build_check "${PROJECT_ROOT}/gitops-workloads/security/base" \
+  "Kustomize: gitops-workloads/security/base" \
+  "gitops-workloads/security/base"
 
 # ============================================================================
 # Shell syntax check (bash -n) for all scripts

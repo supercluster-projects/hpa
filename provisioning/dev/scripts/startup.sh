@@ -78,9 +78,12 @@ Pipeline steps:
   4. Install Harbor
   5. Install Infisical
   6. Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)
-  7. Install Envoy Gateway + Headlamp
-  8. Install GitOps (Kargo + ArgoCD)
-  9. Deploy Workloads (Welcome + Counter)
+  7. Install Casdoor OIDC Provider
+  8. Install Casbin gRPC Authorizer
+  9. Install Envoy Gateway + Headlamp
+  10. Install SecurityPolicy (Casbin extAuth + Casdoor OIDC)
+  11. Install GitOps (Kargo + ArgoCD)
+  12. Deploy Workloads (Welcome + Counter)
 
 Environment:
   .env file at project root sourced automatically
@@ -162,8 +165,6 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   }
 
   log "tofu apply completed successfully."
-
-  log "tofu apply completed successfully."
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
   log "kubeconfig already exists — skipping tofu apply."
 else
@@ -215,7 +216,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=10
+TOTAL_STEPS=13
 
 # Step 0 (tofu) is already done above
 
@@ -226,11 +227,17 @@ step 4 "Install Harbor"             ./install-harbor.sh
 step 5 "Install Infisical"          ./install-infisical.sh
 step 6 "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)" \
                                      ./install-runtimes.sh
-step 7 "Install Envoy Gateway + Headlamp" \
+step 7 "Install Casdoor OIDC Provider" \
+                                     ./install-casdoor.sh
+step 8 "Install Casbin gRPC Authorizer" \
+                                     ./install-casbin.sh
+step 9 "Install Envoy Gateway + Headlamp" \
                                      ./install-gateway.sh
-step 8 "Install GitOps (Kargo + ArgoCD)" \
+step 10 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
+                                     ./install-security-policy.sh
+step 11 "Install GitOps (Kargo + ArgoCD)" \
                                      ./install-gitops.sh
-step 9 "Deploy Workloads (Welcome + Counter)" \
+step 12 "Deploy Workloads (Welcome + Counter)" \
                                      ./install-workloads.sh
 
 # ---- Run verification scripts ---------------------------------------------
@@ -243,8 +250,8 @@ bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreacha
 
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-runtimes.sh verify-gateway.sh \
-                     verify-gitops.sh; do
+                     verify-infisical.sh verify-runtimes.sh verify-casdoor.sh \
+                     verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
 done
