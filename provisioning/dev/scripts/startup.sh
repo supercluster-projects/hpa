@@ -79,12 +79,13 @@ Pipeline steps:
   5. Install Infisical
   6. Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)
   7. Install Kafka (Strimzi Operator + Cluster)
-  8. Install Casdoor OIDC Provider
-  9. Install Casbin gRPC Authorizer
-  10. Install Envoy Gateway + Headlamp
-  11. Install SecurityPolicy (Casbin extAuth + Casdoor OIDC)
-  12. Install GitOps (Kargo + ArgoCD)
-  13. Deploy Workloads (Welcome + Counter)
+  8. Install Spegel P2P OCI Registry Mirror
+  9. Install Casdoor OIDC Provider
+  10. Install Casbin gRPC Authorizer
+  11. Install Envoy Gateway + Headlamp
+  12. Install SecurityPolicy (Casbin extAuth + Casdoor OIDC)
+  13. Install GitOps (Kargo + ArgoCD)
+  14. Deploy Workloads (Welcome + Counter)
 
 Environment:
   .env file at project root sourced automatically
@@ -217,7 +218,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=14
+TOTAL_STEPS=15
 
 # Step 0 (tofu) is already done above
 
@@ -230,17 +231,19 @@ step 6 "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)" \
                                      ./install-runtimes.sh
 step 7 "Install Kafka (Strimzi Operator + Cluster)" \
                                      ./install-kafka.sh
-step 8 "Install Casdoor OIDC Provider" \
+step 8 "Install Spegel P2P OCI Registry Mirror" \
+                                     ./install-spegel.sh
+step 9 "Install Casdoor OIDC Provider" \
                                      ./install-casdoor.sh
-step 9 "Install Casbin gRPC Authorizer" \
+step 10 "Install Casbin gRPC Authorizer" \
                                      ./install-casbin.sh
-step 10 "Install Envoy Gateway + Headlamp" \
+step 11 "Install Envoy Gateway + Headlamp" \
                                      ./install-gateway.sh
-step 11 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
+step 12 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
                                      ./install-security-policy.sh
-step 12 "Install GitOps (Kargo + ArgoCD)" \
+step 13 "Install GitOps (Kargo + ArgoCD)" \
                                      ./install-gitops.sh
-step 13 "Deploy Workloads (Welcome + Counter)" \
+step 14 "Deploy Workloads (Welcome + Counter)" \
                                      ./install-workloads.sh
 
 # ---- Run verification scripts ---------------------------------------------
@@ -253,8 +256,8 @@ bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreacha
 
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-runtimes.sh verify-kafka.sh verify-casdoor.sh \
-                     verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
+                     verify-infisical.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
+                     verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
 done
