@@ -218,7 +218,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=15
+TOTAL_STEPS=16
 
 # Step 0 (tofu) is already done above
 
@@ -245,6 +245,8 @@ step 13 "Install GitOps (Kargo + ArgoCD)" \
                                      ./install-gitops.sh
 step 14 "Deploy Workloads (Welcome + Counter)" \
                                      ./install-workloads.sh
+step 15 "Install Streaming Workload (Stream-Processor)" \
+                                     ./install-streaming-workload.sh
 
 # ---- Run verification scripts ---------------------------------------------
 log ""
@@ -266,9 +268,15 @@ done
 if [ -z "${ENVOY_IP}" ]; then
   log "--- verify-workloads.sh (auto-discover Envoy IP) ---"
   bash ./verify-workloads.sh 2>&1 || log "  (non-fatal) Workload verification may need Envoy IP"
+
+  log "--- verify-streaming-workload.sh ---"
+  bash ./verify-streaming-workload.sh --disable-prodcons-test 2>&1 || log "  (non-fatal) Streaming workload verification may need cluster"
 else
   log "--- verify-workloads.sh (Envoy IP: ${ENVOY_IP}) ---"
   bash ./verify-workloads.sh --envoy-ip "${ENVOY_IP}" 2>&1 || log "  (non-fatal) Some workload checks may need more time"
+
+  log "--- verify-streaming-workload.sh (Envoy IP: ${ENVOY_IP}) ---"
+  bash ./verify-streaming-workload.sh 2>&1 || log "  (non-fatal) Streaming workload verification may need more time"
 fi
 
 # ---- Summary --------------------------------------------------------------
