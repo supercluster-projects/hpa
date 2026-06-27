@@ -1,4 +1,4 @@
-module github.com/hpa/backend/authorizers/casbin-ext-authz
+module github.com/hpa/backend/authorizers/authz
 
 go 1.25.0
 

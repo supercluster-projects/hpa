@@ -34,8 +34,8 @@ HARBOR_HOST="${DEV_HARBOR_URL#*://}"
 HARBOR_IMAGE="${HARBOR_HOST}/library/${DEV_HARBOR_PROJECT}/${IMAGE_NAME}"
 
 # Relative to PROJECT_ROOT (set by preamble.sh)
-DOCKER_BUILD_DIR="backend/authorizers/casbin-ext-authz"
-KUSTOMIZE_DIR="gitops-workloads/authorizers/casbin-ext-authz/base"
+DOCKER_BUILD_DIR="backend/authorizers/authz"
+KUSTOMIZE_DIR="gitops-workloads/authorizers/authz/base"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -53,7 +53,7 @@ Usage: $(basename "$0") [options]
 Build and deploy Casbin gRPC ext_authz authorizer on a Kubernetes cluster.
 
 Steps:
-  1  Build Docker image from backend/authorizers/casbin-ext-authz/
+  1  Build Docker image from backend/authorizers/authz/
   2  Push image to Harbor registry
   3  Create namespace 'casbin' (idempotent)
   4  Apply Kubernetes manifests via Kustomize
@@ -64,8 +64,8 @@ Options:
   --kubeconfig PATH         Path to kubeconfig (default: ../opentofu/kubeconfig)
   --casbin-version VER      Image tag / version (default: CASBIN_VERSION env var)
   --namespace NS            Kubernetes namespace (default: casbin)
-  --docker-build-dir DIR    Docker build context directory (default: backend/authorizers/casbin-ext-authz)
-  --kustomize-dir DIR       Kustomize base directory (default: gitops-workloads/authorizers/casbin-ext-authz/base)
+  --docker-build-dir DIR    Docker build context directory (default: backend/authorizers/authz)
+  --kustomize-dir DIR       Kustomize base directory (default: gitops-workloads/authorizers/authz/base)
   --wait-timeout DUR        Timeout for rollout (default: 10m)
   --help, -h                Show this help message
 HELP
