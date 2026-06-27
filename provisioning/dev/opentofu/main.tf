@@ -76,8 +76,15 @@ resource "libvirt_volume" "talos_base" {
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
 
-  name = "${each.key}-os.qcow2"
-  pool = "default"
+  name     = "${each.key}-os.qcow2"
+  pool     = "default"
+  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+
+  target = {
+    format = {
+      type = "qcow2"
+    }
+  }
 
   backing_store = {
     path = libvirt_volume.talos_base.path
@@ -130,6 +137,10 @@ resource "libvirt_domain" "node" {
 
   cpu = {
     mode = "host-passthrough"
+  }
+
+  features = {
+    acpi = true
   }
 
   devices = {
@@ -213,13 +224,12 @@ resource "talos_machine_configuration_apply" "node" {
   machine_configuration_input = each.value.type == "controlplane" ? data.talos_machine_configuration.controlplane.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
   node                        = each.value.ip
   endpoint                    = each.value.ip
-  apply_mode                  = "auto"
+  apply_mode                  = "reboot"
 
   config_patches = [
     yamlencode({
       machine = {
         network = {
-          hostname    = each.key
           nameservers = local.dns_servers
           interfaces = [
             {

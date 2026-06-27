@@ -32,6 +32,8 @@
 
 # ---- Log setup: capture all output to startup.log at project root --------
 STARTUP_LOG="${PROJECT_ROOT}/startup.log"
+# Clear the log file at the start of each run so stale output is not confusing.
+: > "${STARTUP_LOG}"
 exec > >(tee -a "${STARTUP_LOG}") 2>&1
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
 
@@ -116,11 +118,24 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     die "OpenTofu directory not found at ${TOFU_DIR}"
   fi
 
-  # tofu init if needed
-  if [ ! -f "${TOFU_ABS_DIR}/.terraform.lock.hcl" ]; then
-    log "Running tofu init..."
-    (cd "${TOFU_ABS_DIR}" && tofu init) || die "tofu init failed"
+  # Pre-flight cleanup: destroy existing VMs and OS/ISO volumes (preserves Ceph disks),
+  # then remove stale entries from the tofu state.
+  log "Running pre-flight cleanup..."
+  bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" || {
+    log "Pre-flight cleanup had failures — continuing anyway."
+  }
+  log "Pre-flight cleanup done."
+
+  # tofu init — always run to ensure lock file is current (provider registry
+  # mismatches between Terraform and OpenTofu can cause stale entries).
+  log "Running tofu init..."
+  (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
+
+  # Verify libvirtd is reachable before attempting apply
+  if ! virsh -c qemu:///system list >/dev/null 2>&1; then
+    die "libvirtd is not reachable via 'virsh list'. Ensure libvirtd is running and the current user is in the libvirt group."
   fi
+  log "libvirtd reachable."
 
   log "Running tofu apply -auto-approve (creates 4 Talos VMs)..."
   log "  This takes ~5-8 minutes..."
