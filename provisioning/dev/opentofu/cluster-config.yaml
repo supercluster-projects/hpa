@@ -9,6 +9,10 @@ machine:
   install:
     # Install Talos to the first virtio disk (OS disk, /dev/vda in libvirt)
     disk: /dev/vda
+    # Wipe and re-install Talos so the machine config is applied to a writable
+    # root filesystem. Without this, the pre-installed qcow2 boots as a live
+    # read-only image and etcd/kubelet cannot start.
+    wipe: true
     # Disable predictable network interface naming so interfaces appear as
     # eth0/eth1 rather than enpXsY; required for consistent bond device naming
     extraKernelArgs:
