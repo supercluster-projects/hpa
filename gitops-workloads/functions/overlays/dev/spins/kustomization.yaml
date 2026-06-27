@@ -3,4 +3,4 @@ kind: Kustomization
 
 resources:
   - counter.yaml
-  - stream-processor.yaml
+  - stream.yaml

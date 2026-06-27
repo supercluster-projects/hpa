@@ -9,7 +9,7 @@
 #   4. Wait for SpinApp 'stream-processor' to become Ready
 #
 # The Kustomize overlay at --gitops-overlay-path should contain the
-# stream-processor.yaml SpinApp manifest (under spins/ directory).
+# stream.yaml SpinApp manifest (under spins/ directory).
 #
 # Idempotent: safe to re-run on an already-configured cluster (kubectl apply
 # is used throughout, waits are conditional).
@@ -201,7 +201,7 @@ if [ -n "${GITOPS_ABS_PATH}" ] && [ -f "${GITOPS_ABS_PATH}/kustomization.yaml" ]
 
   # Check if stream-processor is a resource in the spins kustomization
   SPINS_KUSTOMIZE="${GITOPS_ABS_PATH}/spins/kustomization.yaml"
-  if [ -f "${SPINS_KUSTOMIZE}" ] && grep -q stream-processor "${SPINS_KUSTOMIZE}" 2>/dev/null; then
+  if [ -f "${SPINS_KUSTOMIZE}" ] && (grep -q 'stream\.yaml' "${SPINS_KUSTOMIZE}" 2>/dev/null || grep -q stream-processor "${SPINS_KUSTOMIZE}" 2>/dev/null); then
     # Build and apply the spins sub-overlay
     if command -v kustomize >/dev/null 2>&1; then
       SPINS_BUILD=$(kustomize build "${GITOPS_ABS_PATH}/spins" 2>/dev/null) && \
@@ -218,7 +218,7 @@ if [ -n "${GITOPS_ABS_PATH}" ] && [ -f "${GITOPS_ABS_PATH}/kustomization.yaml" ]
 
   # Fallback: try the full overlay
   if [ "${KUSTOMIZE_OK}" != true ]; then
-    log "  stream-processor not found in spins kustomization, trying full overlay..."
+    log "  stream.yaml not found in spins kustomization, trying full overlay..."
     if command -v kustomize >/dev/null 2>&1; then
       FULL_BUILD=$(kustomize build "${GITOPS_ABS_PATH}" 2>/dev/null) && \
         echo "${FULL_BUILD}" | kubectl apply -f - > /dev/null 2>&1 && \
@@ -235,14 +235,15 @@ fi
 
 # Fallback: apply the stream-processor manifest directly
 if [ "${KUSTOMIZE_OK}" != true ]; then
-  log "  Kustomize not available or stream-processor not in overlay, applying manifest directly..."
+  log "  Kustomize not available or stream.yaml not in overlay, applying manifest directly..."
+
 
   # Try to find the stream-processor.yaml manifest
   STREAM_MANIFEST=""
   for candidate in \
-    "${GITOPS_ABS_PATH}/spins/stream-processor.yaml" \
-    "${GITOPS_OVERLAY_PATH}/spins/stream-processor.yaml" \
-    "${PROJECT_ROOT}/gitops-workloads/functions/overlays/dev/spins/stream-processor.yaml"; do
+    "${GITOPS_ABS_PATH}/spins/stream.yaml" \
+    "${GITOPS_OVERLAY_PATH}/spins/stream.yaml" \
+    "${PROJECT_ROOT}/gitops-workloads/functions/overlays/dev/spins/stream.yaml"; do
     if [ -f "${candidate}" ]; then
       STREAM_MANIFEST="${candidate}"
       break
@@ -255,7 +256,7 @@ if [ "${KUSTOMIZE_OK}" != true ]; then
     log "  Manifest '${STREAM_MANIFEST}': APPLIED"
     KUSTOMIZE_OK=true
   else
-    die "Could not find stream-processor.yaml manifest. Ensure it exists in the gitops overlay path."
+    die "Could not find stream.yaml manifest. Ensure it exists in the gitops overlay path."
   fi
 fi
 
