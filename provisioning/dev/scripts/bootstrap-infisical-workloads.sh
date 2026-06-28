@@ -49,7 +49,7 @@ WORKLOAD_SECRETS["COUNTER_ADDR"]="http://counter.hpa-workloads.svc.cluster.local
 WORKLOAD_SECRETS["KEYDB_URL"]="redis://keydb.keydb.svc.cluster.local:6379/"
 
 # Workload namespaces that need Infisical machine identities
-WORKLOAD_NAMESPACES=("hpa-workloads" "casbin")
+WORKLOAD_NAMESPACES=("hpa-workloads" "casbin" "hasura")
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do

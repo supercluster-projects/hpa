@@ -1,0 +1,45 @@
+# ---------------------------------------------------------------------------
+# gql-route.yaml — HTTPRoute for Hasura GraphQL /gql endpoint
+#
+# Routes requests to the Hasura GraphQL Engine ClusterIP service on port
+# 8080. The /gql path prefix maps to Hasura's /v1/graphql endpoint.
+#
+# NOTE: This route is designed for TLS-terminated access behind Envoy
+# Gateway. TLS configuration is deferred to M006 (Production mesh).
+# Apply this route only after TLS is configured.
+#
+# Apply:
+#   kubectl apply -f gql-route.yaml
+#
+# Test:
+#   curl -X POST http://<envoy-ip>/gql \
+#     -H "Content-Type: application/json" \
+#     -H "x-hasura-admin-secret: <secret>" \
+#     -d '{"query":"{ __schema { queryType { name } } }"}'
+# ---------------------------------------------------------------------------
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gql-route
+  namespace: envoy-gateway-system
+  labels:
+    app.kubernetes.io/name: hasura
+    app.kubernetes.io/part-of: hpa-workloads
+spec:
+  parentRefs:
+    - name: hpa-dev-gateway
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /gql
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /v1/graphql
+      backendRefs:
+        - name: hasura-graphql-engine
+          namespace: hasura
+          port: 8080

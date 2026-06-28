@@ -238,21 +238,58 @@ fi
 # starts successfully per decision D003. This check uses a negative test:
 # kubectl get secret returns non-zero when the Secret does not exist.
 #
+# Extended to sweep workload namespaces for any bootstrap-pattern Secrets
+# (infisical-token, bootstrap-*, etc.) across the casbin and hpa-workloads
+# namespaces, in case the workload bootstrap script left service tokens or
+# other ephemeral credentials behind.
+#
 # REDACTION: This phase MUST NOT log any Secret values (INFISICAL_ENCRYPTION_KEY,
 # INFISICAL_ADMIN_PASSWORD, INFISICAL_AUTH_SECRET). Only report existence/absence.
 # ============================================================================
-log "Phase 5: Checking bootstrap-infisical Secret absence (security requirement)"
+log "Phase 5: Checking bootstrap Secret absence (security sweep)"
+
+BOOTSTRAP_FOUND=0
+PHASE5_DETAIL=""
+
+# Check 1: Original bootstrap-infisical Secret (from install-infisical.sh)
 if kubectl --kubeconfig "${KUBECONFIG}" -n "${NAMESPACE}" \
   get secret bootstrap-infisical >/dev/null 2>&1; then
-  # Secret still exists -- this is a security failure
   err "Phase 5: bootstrap-infisical Secret STILL EXISTS in namespace ${NAMESPACE}"
-  PHASE5_STATUS="FAIL"
-  PHASE5_DETAIL="bootstrap-infisical still exists"
-  OVERALL_FAILED=1
-else
+  BOOTSTRAP_FOUND=$((BOOTSTRAP_FOUND + 1))
+  PHASE5_DETAIL="bootstrap-infisical still in ${NAMESPACE}"
+fi
+
+# Check 2: Sweep workload namespaces for bootstrap-pattern Secrets
+for ns in hpa-workloads casbin; do
+  for secret in $(kubectl --kubeconfig "${KUBECONFIG}" -n "${ns}" \
+    get secrets -o name 2>/dev/null \
+    | sed 's|secret/||' \
+    | grep -i -E '^infisical-token$' 2>/dev/null || true); do
+    err "Phase 5: Bootstrap Secret '${secret}' STILL EXISTS in namespace '${ns}'"
+    BOOTSTRAP_FOUND=$((BOOTSTRAP_FOUND + 1))
+    PHASE5_DETAIL="${PHASE5_DETAIL} ${secret} in ${ns},"
+  done
+
+  for secret in $(kubectl --kubeconfig "${KUBECONFIG}" -n "${ns}" \
+    get secrets -o name 2>/dev/null \
+    | sed 's|secret/||' \
+    | grep -i -E 'bootstrap' 2>/dev/null || true); do
+    if [[ "${secret}" != *-infisical-secrets ]] && [ "${secret}" != "infisical-auth" ] && [ "${secret}" != "sh.helm.release"* ]; then
+      err "Phase 5: Bootstrap-pattern Secret '${secret}' STILL EXISTS in namespace '${ns}'"
+      BOOTSTRAP_FOUND=$((BOOTSTRAP_FOUND + 1))
+      PHASE5_DETAIL="${PHASE5_DETAIL} ${secret} in ${ns},"
+    fi
+  done
+done
+
+if [ "${BOOTSTRAP_FOUND}" -eq 0 ]; then
   PHASE5_STATUS="PASS"
-  PHASE5_DETAIL="bootstrap-infisical deleted"
+  PHASE5_DETAIL="All bootstrap Secrets cleaned up"
   log "Phase 5: ${PHASE5_DETAIL} -- PASSED"
+else
+  PHASE5_STATUS="FAIL"
+  [ -z "${PHASE5_DETAIL}" ] && PHASE5_DETAIL="${BOOTSTRAP_FOUND} bootstrap Secret(s) still exist"
+  OVERALL_FAILED=1
 fi
 
 # ============================================================================

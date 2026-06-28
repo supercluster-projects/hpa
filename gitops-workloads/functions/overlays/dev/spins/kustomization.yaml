@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
   - counter.yaml
   - stream.yaml
+  - infisical-secret-counter.yaml
+  - infisical-secret-stream-processor.yaml
