@@ -97,6 +97,7 @@ Pipeline steps:
   21. Install kube-state-metrics
   22. Install Grafana Dashboards
   23. Install AlertManager
+  24. Configure TLS + Routes (cert-manager, HTTPS, gql, welcome)
 
 Environment:
   .env file at project root sourced automatically
@@ -242,7 +243,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=24
+TOTAL_STEPS=25
 
 # Step 0 (tofu) is already done above
 
@@ -279,6 +280,7 @@ step 20 "Install vmagent DaemonSet"  ./install-vmagent.sh
 step 21 "Install kube-state-metrics"  ./install-kube-state-metrics.sh
 step 22 "Install Grafana Dashboards"  ./install-grafana.sh
 step 23 "Install AlertManager"  ./install-alertmanager.sh
+step 24 "Configure TLS + Routes"  ./install-tls.sh
 
 # ---- Run verification scripts ---------------------------------------------
 log ""
@@ -290,7 +292,7 @@ bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreacha
 
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
+                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
                      verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
