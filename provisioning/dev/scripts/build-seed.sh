@@ -302,7 +302,7 @@ if [ "${SKIP_OCI}" = false ]; then
   declare -a BUILD_IMAGES=(
     "casbin-ext-authz:${CASBIN_VERSION}"
   )
-  # Note: welcome, counter, stream-processor images are built from source
+  # Note: welcome, counter, stream images are built from source
   # and pushed directly to Harbor — they must be built separately.
 fi
 

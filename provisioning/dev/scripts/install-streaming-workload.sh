@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# install-streaming-workload.sh — Deploy SpinApp stream-processor workload
+# install-streaming-workload.sh — Deploy SpinApp stream workload
 #
-# Deploys the stream-processor SpinApp on a Kubernetes cluster by:
+# Deploys the stream SpinApp on a Kubernetes cluster by:
 #   1. Pre-flight check: Kafka cluster (hpa-kafka) is Ready via Strimzi CR
 #   2. Pre-flight check: KeyDB deployment is available
-#   3. Apply SpinApp 'stream-processor' via Kustomize overlay (or direct apply)
-#   4. Wait for SpinApp 'stream-processor' to become Ready
+#   3. Apply SpinApp 'stream' via Kustomize overlay (or direct apply)
+#   4. Wait for SpinApp 'stream' to become Ready
 #
 # The Kustomize overlay at --gitops-overlay-path should contain the
 # stream.yaml SpinApp manifest (under spins/ directory).
@@ -54,13 +54,13 @@ while [[ $# -gt 0 ]]; do
       cat >&2 <<HELP
 Usage: $(basename "$0") [options]
 
-Deploy stream-processor SpinApp workload with pre-flight dependency checks.
+Deploy stream SpinApp workload with pre-flight dependency checks.
 
 Steps:
   1  Pre-flight: verify Kafka cluster 'hpa-kafka' is Ready
   2  Pre-flight: verify KeyDB deployment is available
-  3  Apply SpinApp 'stream-processor' via Kustomize overlay
-  4  Wait for SpinApp 'stream-processor' to become Ready
+  3  Apply SpinApp 'stream' via Kustomize overlay
+  4  Wait for SpinApp 'stream' to become Ready
 
 Options:
   --kubeconfig PATH              Path to kubeconfig (default: ../opentofu/kubeconfig)
@@ -173,9 +173,9 @@ fi
 log "  All pre-flight checks passed. Proceeding with SpinApp deployment."
 
 # ============================================================================
-# Step 3: Apply SpinApp 'stream-processor' via Kustomize overlay
+# Step 3: Apply SpinApp 'stream' via Kustomize overlay
 # ============================================================================
-log "Step 3: Applying SpinApp 'stream-processor'"
+log "Step 3: Applying SpinApp 'stream'"
 
 # Ensure the workloads namespace exists
 kubectl create namespace "${WORKLOADS_NAMESPACE}" --dry-run=client -o yaml \
@@ -199,9 +199,9 @@ KUSTOMIZE_OK=false
 if [ -n "${GITOPS_ABS_PATH}" ] && [ -f "${GITOPS_ABS_PATH}/kustomization.yaml" ]; then
   log "  Using Kustomize overlay at '${GITOPS_ABS_PATH}'"
 
-  # Check if stream-processor is a resource in the spins kustomization
+  # Check if stream is a resource in the spins kustomization
   SPINS_KUSTOMIZE="${GITOPS_ABS_PATH}/spins/kustomization.yaml"
-  if [ -f "${SPINS_KUSTOMIZE}" ] && (grep -q 'stream\.yaml' "${SPINS_KUSTOMIZE}" 2>/dev/null || grep -q stream-processor "${SPINS_KUSTOMIZE}" 2>/dev/null); then
+  if [ -f "${SPINS_KUSTOMIZE}" ] && (grep -q 'stream\.yaml' "${SPINS_KUSTOMIZE}" 2>/dev/null || grep -q stream "${SPINS_KUSTOMIZE}" 2>/dev/null); then
     # Build and apply the spins sub-overlay
     if command -v kustomize >/dev/null 2>&1; then
       SPINS_BUILD=$(kustomize build "${GITOPS_ABS_PATH}/spins" 2>/dev/null) && \
@@ -233,12 +233,12 @@ if [ -n "${GITOPS_ABS_PATH}" ] && [ -f "${GITOPS_ABS_PATH}/kustomization.yaml" ]
   fi
 fi
 
-# Fallback: apply the stream-processor manifest directly
+# Fallback: apply the stream manifest directly
 if [ "${KUSTOMIZE_OK}" != true ]; then
   log "  Kustomize not available or stream.yaml not in overlay, applying manifest directly..."
 
 
-  # Try to find the stream-processor.yaml manifest
+  # Try to find the stream.yaml manifest
   STREAM_MANIFEST=""
   for candidate in \
     "${GITOPS_ABS_PATH}/spins/stream.yaml" \
@@ -252,7 +252,7 @@ if [ "${KUSTOMIZE_OK}" != true ]; then
 
   if [ -n "${STREAM_MANIFEST}" ]; then
     kubectl apply -f "${STREAM_MANIFEST}" > /dev/null 2>&1 \
-      || die "Failed to apply stream-processor manifest from '${STREAM_MANIFEST}'"
+      || die "Failed to apply stream manifest from '${STREAM_MANIFEST}'"
     log "  Manifest '${STREAM_MANIFEST}': APPLIED"
     KUSTOMIZE_OK=true
   else
@@ -261,42 +261,42 @@ if [ "${KUSTOMIZE_OK}" != true ]; then
 fi
 
 # Verify the SpinApp CR was created
-if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor > /dev/null 2>&1; then
+if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream > /dev/null 2>&1; then
   STREAM_PROCESSOR_APPLIED=true
-  log "  SpinApp 'stream-processor': APPLIED"
+  log "  SpinApp 'stream': APPLIED"
 else
-  die "SpinApp 'stream-processor' not found after apply"
+  die "SpinApp 'stream' not found after apply"
 fi
 
 # ============================================================================
-# Step 4: Wait for SpinApp 'stream-processor' to become Ready
+# Step 4: Wait for SpinApp 'stream' to become Ready
 # ============================================================================
-log "Step 4: Waiting for SpinApp 'stream-processor' to become Ready"
+log "Step 4: Waiting for SpinApp 'stream' to become Ready"
 
 STREAM_STATUS="NOT READY"
 if [ "${STREAM_PROCESSOR_APPLIED}" = true ]; then
   # SpinApp uses conditions similar to Knative. Check Ready condition.
-  SPINAPP_READY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+  SPINAPP_READY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
     -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
 
   if [ "${SPINAPP_READY}" = "True" ]; then
     STREAM_STATUS="Ready"
-    log "  SpinApp 'stream-processor': READY"
+    log "  SpinApp 'stream': READY"
   elif [ "${SPINAPP_READY}" = "Unknown" ]; then
-    SPINAPP_REASON=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+    SPINAPP_REASON=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
       -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "Unknown")
-    log "  SpinApp 'stream-processor' progressing: condition=${SPINAPP_READY}, reason=${SPINAPP_REASON}"
+    log "  SpinApp 'stream' progressing: condition=${SPINAPP_READY}, reason=${SPINAPP_REASON}"
     STREAM_STATUS="Progressing (${SPINAPP_REASON})"
 
     # Check if the underlying deployment exists and is ready
-    if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream-processor > /dev/null 2>&1; then
-      kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" rollout status deployment/stream-processor \
+    if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream > /dev/null 2>&1; then
+      kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" rollout status deployment/stream \
         --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 && \
-        log "  Deployment 'stream-processor': ROLLOUT COMPLETE" || \
-        log "  (non-fatal) Deployment 'stream-processor' rollout did not complete within ${WAIT_TIMEOUT}"
+        log "  Deployment 'stream': ROLLOUT COMPLETE" || \
+        log "  (non-fatal) Deployment 'stream' rollout did not complete within ${WAIT_TIMEOUT}"
     fi
   else
-    err "SpinApp 'stream-processor' not Ready: condition=${SPINAPP_READY}"
+    err "SpinApp 'stream' not Ready: condition=${SPINAPP_READY}"
     STREAM_STATUS="Failed (${SPINAPP_READY})"
   fi
 fi
@@ -308,12 +308,12 @@ log "Step 5: Gathering component statuses"
 
 # SpinApp detailed status
 SPINAPP_DETAIL="NOT FOUND"
-if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor > /dev/null 2>&1; then
-  SPINAPP_RDY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream > /dev/null 2>&1; then
+  SPINAPP_RDY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
     -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
-  SPINAPP_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+  SPINAPP_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
     -o jsonpath='{.status.replicas}' 2>/dev/null || echo "N/A")
-  SPINAPP_RDY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+  SPINAPP_RDY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
     -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "N/A")
   SPINAPP_DETAIL="Ready=${SPINAPP_RDY}, replicas=${SPINAPP_REPLICAS}, ready=${SPINAPP_RDY_REPLICAS}"
 fi
@@ -345,7 +345,7 @@ echo "    KeyDB available:    ${KEYDB_AVAILABLE} (readyReplicas: ${KEYDB_DETAIL}
 echo "    KeyDB endpoint:     keydb.${KEYDB_NAMESPACE}.svc.cluster.local:6379"
 echo ""
 echo "  SpinApp:"
-echo "    name:               stream-processor"
+echo "    name:               stream"
 echo "    namespace:          ${WORKLOADS_NAMESPACE}"
 echo "    status:             ${STREAM_STATUS}"
 echo "    detail:             ${SPINAPP_DETAIL}"
@@ -353,7 +353,7 @@ echo ""
 echo "  Pipeline:"
 echo "    Kafka -> SpinKube -> KeyDB"
 echo "    Topic: hpa-events"
-echo "    Consumer group: hpa-stream-processor"
+echo "    Consumer group: hpa-stream"
 echo "    KeyDB counter keys: device_count:<device_type>"
 echo ""
 echo "  Pods in workload namespace:"

@@ -23,7 +23,7 @@ OVERALL_FAILED=0
 
 # Workload namespaces
 WORKLOAD_NS=("hpa-workloads" "casbin" "hasura")
-MANAGED_SECRETS=("welcome-infisical-secrets" "casbin-infisical-secrets" "counter-infisical-secrets" "stream-processor-infisical-secrets")
+MANAGED_SECRETS=("welcome-infisical-secrets" "casbin-infisical-secrets" "counter-infisical-secrets" "stream-infisical-secrets")
 AUTH_SECRETS=("infisical-auth:hpa-workloads" "infisical-auth:casbin" "infisical-auth:hasura")
 
 # ---- CLI Overrides --------------------------------------------------------
@@ -135,7 +135,7 @@ fi
 EXPECTED_CRDS=(
   "hpa-workloads:welcome-secrets"
   "hpa-workloads:counter-secrets"
-  "hpa-workloads:stream-processor-secrets"
+  "hpa-workloads:stream-secrets"
   "casbin:casbin-secrets"
   "hasura:hasura-secrets"
 )
@@ -176,7 +176,7 @@ MANAGED_DETAIL=""
 for secret in "${MANAGED_SECRETS[@]}"; do
   # Determine namespace from secret name
   case "${secret}" in
-    welcome-infisical-secrets|counter-infisical-secrets|stream-processor-infisical-secrets)
+    welcome-infisical-secrets|counter-infisical-secrets|stream-infisical-secrets)
       ns="hpa-workloads" ;;
     casbin-infisical-secrets)
       ns="casbin" ;;
