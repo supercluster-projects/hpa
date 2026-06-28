@@ -28,6 +28,7 @@ metadata:
 spec:
   parentRefs:
     - name: hpa-dev-gateway
+      sectionName: https
   rules:
     - matches:
         - path:

@@ -1,10 +1,10 @@
 apiVersion: core.spinoperator.dev/v1alpha1
 kind: SpinApp
 metadata:
-  name: stream-processor
+  name: stream
   namespace: hpa-workloads
 spec:
-  image: harbor.harbor.svc.cluster.local/library/hpa-workloads/stream-processor:latest
+  image: harbor.harbor.svc.cluster.local/library/hpa-workloads/stream:latest
   replicas: 1
   executor: default
   environment:

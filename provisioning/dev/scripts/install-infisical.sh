@@ -104,7 +104,7 @@ fi
 # Step 1: Add/update Infisical Helm repo
 # ============================================================================
 log "Step 1: Adding/updating Infisical Helm repo"
-helm repo add infisical "${INFISICAL_HELM_REPO}" --force-update > /dev/null 2>&1 \
+helm repo add infisical "https://helm.infisical.com" --force-update > /dev/null 2>&1 \
   || die "Failed to add Infisical Helm repo"
 helm repo update > /dev/null 2>&1 \
   || die "Failed to update Helm repos"

@@ -107,8 +107,8 @@ log "  worker targets: ${WORKER_NAMES[*]}"
 # ============================================================================
 # Step 1: Add/update Rook Helm repo
 # ============================================================================
-log "Step 1: Adding/updating Rook Helm repo (${ROOK_HELM_REPO})"
-helm repo add rook-release "${ROOK_HELM_REPO}" --force-update > /dev/null 2>&1 \
+log "Step 1: Adding/updating Rook Helm repo"
+helm repo add rook-release "https://charts.rook.io/release" --force-update > /dev/null 2>&1 \
   || die "Failed to add Rook Helm repo"
 helm repo update > /dev/null 2>&1 \
   || die "Failed to update Helm repos"

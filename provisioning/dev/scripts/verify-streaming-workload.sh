@@ -4,8 +4,8 @@
 #
 # Verifies the end-to-end streaming pipeline deployed by
 # install-streaming-workload.sh. Phases:
-#   Phase 1: SpinApp 'stream-processor' Ready and underlying pods healthy
-#   Phase 2: Kafka consumer group 'hpa-stream-processor' connected
+#   Phase 1: SpinApp 'stream' Ready and underlying pods healthy
+#   Phase 2: Kafka consumer group 'hpa-stream' connected
 #   Phase 3: Produce test event to hpa-events topic and verify KeyDB counter
 #
 # Each phase produces PASS / WARN / FAIL with detail. A final summary table
@@ -35,7 +35,7 @@ WORKLOADS_NAMESPACE="${DEV_WORKLOADS_NAMESPACE}"
 KAFKA_NAMESPACE="strimzi"
 KAFKA_CLUSTER_NAME="hpa-kafka"
 KEYDB_NAMESPACE="keydb"
-CONSUMER_GROUP="hpa-stream-processor"
+CONSUMER_GROUP="hpa-stream"
 KAFKA_CLIENT_IMAGE="quay.io/strimzi-test-clients/test-clients:latest-kafka-3.9.0"
 DISABLE_PRODCONS_TEST=false
 WAIT_TIMEOUT=120
@@ -55,11 +55,11 @@ while [[ $# -gt 0 ]]; do
       cat >&2 <<HELP
 Usage: $(basename "$0") [options]
 
-Verify stream-processor SpinApp, Kafka consumer group, and end-to-end pipeline.
+Verify stream SpinApp, Kafka consumer group, and end-to-end pipeline.
 
 Phases:
-  1  SpinApp 'stream-processor' Ready and underlying Deployment healthy
-  2  Kafka consumer group 'hpa-stream-processor' connected
+  1  SpinApp 'stream' Ready and underlying Deployment healthy
+  2  Kafka consumer group 'hpa-stream' connected
   3  Produce test event to hpa-events topic and verify KeyDB counter increment
 
 Options:
@@ -102,7 +102,7 @@ command -v kubectl >/dev/null 2>&1 || die "kubectl not found in PATH"
 [ -f "${KUBECONFIG}" ] || die "kubeconfig not found at ${KUBECONFIG}"
 
 # ---- Results accumulator --------------------------------------------------
-PHASE1_STATUS=""   # SpinApp stream-processor pod health
+PHASE1_STATUS=""   # SpinApp stream pod health
 PHASE1_DETAIL=""
 PHASE2_STATUS=""   # Kafka consumer group connected
 PHASE2_DETAIL=""
@@ -181,9 +181,9 @@ check_pod_health() {
 }
 
 # ============================================================================
-# Phase 1: SpinApp 'stream-processor' Ready and underlying pods healthy
+# Phase 1: SpinApp 'stream' Ready and underlying pods healthy
 # ============================================================================
-log "Phase 1: SpinApp 'stream-processor' Ready and pod health"
+log "Phase 1: SpinApp 'stream' Ready and pod health"
 
 SPINAPP_READY=""
 SPINAPP_DETAIL=""
@@ -199,20 +199,20 @@ if ! kubectl --kubeconfig "${KUBECONFIG}" get crd spinapps.core.spinoperator.dev
 fi
 
 if [ -z "${PHASE1_STATUS}" ]; then
-  if ! kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor > /dev/null 2>&1; then
-    err "SpinApp 'stream-processor' not found in namespace '${WORKLOADS_NAMESPACE}'"
+  if ! kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream > /dev/null 2>&1; then
+    err "SpinApp 'stream' not found in namespace '${WORKLOADS_NAMESPACE}'"
     PHASE1_STATUS="FAIL"
-    PHASE1_DETAIL="spinapp/stream-processor not found"
+    PHASE1_DETAIL="spinapp/stream not found"
     OVERALL_FAILED=1
   else
     # Check the Ready condition
-    SPINAPP_READY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+    SPINAPP_READY=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
       -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}' 2>/dev/null || echo "Unknown")
-    SPINAPP_REASON=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+    SPINAPP_REASON=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
       -o jsonpath='{.status.conditions[?(@.type=="Ready")].reason}' 2>/dev/null || echo "")
-    SPINAPP_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+    SPINAPP_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
       -o jsonpath='{.status.replicas}' 2>/dev/null || echo "N/A")
-    SPINAPP_RDY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor \
+    SPINAPP_RDY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream \
       -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "N/A")
 
     detail="Ready=${SPINAPP_READY}, replicas=${SPINAPP_REPLICAS}, readyReplicas=${SPINAPP_RDY_REPLICAS}"
@@ -221,10 +221,10 @@ fi
 
 # Check the underlying Deployment if SpinApp exists
 STREAM_DEPLOY_READY=false
-if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream-processor > /dev/null 2>&1; then
-  DEPLOY_AVAILABLE=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream-processor \
+if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream > /dev/null 2>&1; then
+  DEPLOY_AVAILABLE=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream \
     -o jsonpath='{.status.conditions[?(@.type=="Available")].status}' 2>/dev/null || echo "False")
-  DEPLOY_READY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream-processor \
+  DEPLOY_READY_REPLICAS=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream \
     -o jsonpath='{.status.readyReplicas}' 2>/dev/null || echo "0")
   if [ "${DEPLOY_AVAILABLE}" = "True" ] && [ "${DEPLOY_READY_REPLICAS:-0}" -gt 0 ]; then
     STREAM_DEPLOY_READY=true
@@ -232,9 +232,9 @@ if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployme
   else
     detail="${detail}, deployment=NotAvailable, readyReplicas=${DEPLOY_READY_REPLICAS}"
   fi
-  log "  Deployment 'stream-processor': Available=${DEPLOY_AVAILABLE}, readyReplicas=${DEPLOY_READY_REPLICAS}"
+  log "  Deployment 'stream': Available=${DEPLOY_AVAILABLE}, readyReplicas=${DEPLOY_READY_REPLICAS}"
 else
-  log "  Deployment 'stream-processor' not found — may not have been created by the SpinApp operator yet"
+  log "  Deployment 'stream' not found — may not have been created by the SpinApp operator yet"
   detail="${detail}, deployment=not-found"
 fi
 
@@ -253,7 +253,7 @@ if [ -z "${PHASE1_STATUS}" ]; then
     PHASE1_DETAIL="Progressing: ${detail}"
     log "Phase 1: ${detail} -- WARN (still progressing)"
   else
-    err "SpinApp 'stream-processor' not ready: ${detail}"
+    err "SpinApp 'stream' not ready: ${detail}"
     PHASE1_STATUS="FAIL"
     PHASE1_DETAIL="${detail}"
     [ -n "${SPINAPP_REASON}" ] && PHASE1_DETAIL="${PHASE1_DETAIL}, reason=${SPINAPP_REASON}"
@@ -262,7 +262,7 @@ if [ -z "${PHASE1_STATUS}" ]; then
 fi
 
 # ============================================================================
-# Phase 2: Kafka consumer group 'hpa-stream-processor' connected
+# Phase 2: Kafka consumer group 'hpa-stream' connected
 # ============================================================================
 log "Phase 2: Kafka consumer group '${CONSUMER_GROUP}' connected"
 
@@ -501,8 +501,8 @@ else
         else
           log "  Produce succeeded (exit=${PRODUCE_EXIT_CODE})"
 
-          # Wait for the stream-processor to consume the event and increment the counter
-          log "  Waiting 5s for stream-processor to process the event..."
+          # Wait for the stream to consume the event and increment the counter
+          log "  Waiting 5s for stream to process the event..."
           sleep 5
 
           # Check the counter value after producing
@@ -521,7 +521,7 @@ else
             log "Phase 3: ${PHASE3_DETAIL} -- PASSED"
           elif [ "${AFTER_COUNTER}" -eq 0 ] && [ "${BEFORE_COUNTER}" -eq 0 ]; then
             PHASE3_STATUS="WARN"
-            PHASE3_DETAIL="Counter '${COUNTER_KEY}' remains 0 after produce (stream-processor may not be consuming yet)"
+            PHASE3_DETAIL="Counter '${COUNTER_KEY}' remains 0 after produce (stream may not be consuming yet)"
             log "Phase 3: ${PHASE3_DETAIL} -- WARN (no increment detected)"
           else
             PHASE3_STATUS="WARN"
@@ -560,7 +560,7 @@ echo ""
 # ---- Diagnostics ----------------------------------------------------------
 log "Diagnostics:"
 log "  SpinApp:"
-kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream-processor -o yaml 2>/dev/null \
+kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get spinapp stream -o yaml 2>/dev/null \
   | grep -E "(status:| readyReplicas:| replicas:| conditions:)" || log "  (unable to get SpinApp status)"
 log "  Pods in workload namespace:"
 kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get pods 2>/dev/null \
