@@ -2,9 +2,8 @@
 # ---------------------------------------------------------------------------
 # install-casbin.sh — Build and deploy Casbin gRPC ext_authz authorizer
 #
-# Builds the Casbin gRPC authorization server Docker image from source,
-# pushes it to Harbor, then applies the Kubernetes manifests (Deployment,
-# Service, ConfigMap) via Kustomize.
+# Delegates Docker image build and push to build-casbin.sh, then applies
+# the Kubernetes manifests (Deployment, Service, ConfigMap) via Kustomize.
 #
 # The Casbin authorizer implements the Envoy ext_authz Authorization
 # Check() RPC, supporting RBAC policies loaded from a ConfigMap.
@@ -15,7 +14,6 @@
 #
 # Usage: ./install-casbin.sh [--kubeconfig <path>] [--casbin-version <ver>]
 #                            [--namespace <ns>] [--kustomize-dir <dir>]
-#                            [--docker-build-dir <dir>]
 #                            [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
@@ -34,7 +32,6 @@ HARBOR_HOST="${DEV_HARBOR_URL#*://}"
 HARBOR_IMAGE="${HARBOR_HOST}/library/${DEV_HARBOR_PROJECT}/${IMAGE_NAME}"
 
 # Relative to PROJECT_ROOT (set by preamble.sh)
-DOCKER_BUILD_DIR="backend/authorizers/authz"
 KUSTOMIZE_DIR="gitops-workloads/authorizers/authz/base"
 
 # ---- CLI Overrides --------------------------------------------------------
@@ -43,7 +40,6 @@ while [[ $# -gt 0 ]]; do
     --kubeconfig)        KUBECONFIG="$2";               shift 2 ;;
     --casbin-version)    CASBIN_VERSION="$2";            shift 2 ;;
     --namespace)         NAMESPACE="$2";                 shift 2 ;;
-    --docker-build-dir)  DOCKER_BUILD_DIR="$2";          shift 2 ;;
     --kustomize-dir)     KUSTOMIZE_DIR="$2";             shift 2 ;;
     --wait-timeout)      WAIT_TIMEOUT="$2";              shift 2 ;;
     --help|-h)
@@ -53,18 +49,16 @@ Usage: $(basename "$0") [options]
 Build and deploy Casbin gRPC ext_authz authorizer on a Kubernetes cluster.
 
 Steps:
-  1  Build Docker image from backend/authorizers/authz/
-  2  Push image to Harbor registry
-  3  Create namespace 'casbin' (idempotent)
-  4  Apply Kubernetes manifests via Kustomize
-  5  Wait for Deployment rollout
-  6  Print summary
+  1  Build and push Docker image to Harbor (delegated to build-casbin.sh)
+  2  Create namespace 'casbin' (idempotent)
+  3  Apply Kubernetes manifests via Kustomize
+  4  Wait for Deployment rollout
+  5  Print summary
 
 Options:
   --kubeconfig PATH         Path to kubeconfig (default: ../opentofu/kubeconfig)
   --casbin-version VER      Image tag / version (default: CASBIN_VERSION env var)
   --namespace NS            Kubernetes namespace (default: casbin)
-  --docker-build-dir DIR    Docker build context directory (default: backend/authorizers/authz)
   --kustomize-dir DIR       Kustomize base directory (default: gitops-workloads/authorizers/authz/base)
   --wait-timeout DUR        Timeout for rollout (default: 10m)
   --help, -h                Show this help message
@@ -78,7 +72,7 @@ done
 export KUBECONFIG
 
 # ---- Resolve paths relative to PROJECT_ROOT ------------------------------
-DOCKER_BUILD_ABS="${PROJECT_ROOT}/${DOCKER_BUILD_DIR}"
+BUILD_SCRIPT="${SCRIPT_DIR}/build-casbin.sh"
 KUSTOMIZE_ABS="${PROJECT_ROOT}/${KUSTOMIZE_DIR}"
 
 # ---- Preflight Checks -----------------------------------------------------
@@ -88,60 +82,36 @@ log "  casbin-version:    ${CASBIN_VERSION}"
 log "  namespace:         ${NAMESPACE}"
 log "  harbor url:        ${DEV_HARBOR_URL}"
 log "  harbor image:      ${HARBOR_IMAGE}:${CASBIN_VERSION}"
-log "  docker build dir:  ${DOCKER_BUILD_ABS}"
 log "  kustomize dir:     ${KUSTOMIZE_ABS}"
 log "  wait timeout:      ${WAIT_TIMEOUT}"
 
-command -v docker >/dev/null 2>&1   || die "docker not found in PATH"
-command -v kubectl >/dev/null 2>&1  || die "kubectl not found in PATH"
-command -v kustomize >/dev/null 2>&1 || die "kustomize not found in PATH (try 'kubectl kustomize')"
-[ -f "${KUBECONFIG}" ]              || die "kubeconfig not found at ${KUBECONFIG}"
-[ -d "${DOCKER_BUILD_ABS}" ]        || die "Docker build directory not found at ${DOCKER_BUILD_ABS}"
-[ -d "${KUSTOMIZE_ABS}" ]           || die "Kustomize directory not found at ${KUSTOMIZE_ABS}"
+command -v kubectl >/dev/null 2>&1   || die "kubectl not found in PATH"
+command -v kustomize >/dev/null 2>&1  || die "kustomize not found in PATH (try 'kubectl kustomize')"
+[ -f "${KUBECONFIG}" ]               || die "kubeconfig not found at ${KUBECONFIG}"
+[ -f "${BUILD_SCRIPT}" ]             || die "build-casbin.sh not found at ${BUILD_SCRIPT}"
+[ -d "${KUSTOMIZE_ABS}" ]            || die "Kustomize directory not found at ${KUSTOMIZE_ABS}"
 [ -f "${KUSTOMIZE_ABS}/kustomization.yaml" ] || die "kustomization.yaml not found in ${KUSTOMIZE_ABS}"
 
 # ============================================================================
-# Step 1: Build Docker image
+# Step 1: Build and push Docker image via build-casbin.sh
 # ============================================================================
-log "Step 1: Building Docker image '${IMAGE_NAME}:${CASBIN_VERSION}'"
-docker build -t "${IMAGE_NAME}:${CASBIN_VERSION}" \
-  "${DOCKER_BUILD_ABS}" > /dev/null 2>&1 \
-  || die "Docker build failed"
-log "  Docker build: SUCCESS (${DOCKER_BUILD_ABS})"
+log "Step 1: Building and pushing Casbin image to Harbor via build-casbin.sh"
+"${BUILD_SCRIPT}" --image-tag "${CASBIN_VERSION}" > /dev/null 2>&1 || die "build-casbin.sh failed"
+log "  build-casbin.sh: SUCCESS"
 
 # ============================================================================
-# Step 2: Tag and push image to Harbor
+# Step 2: Create namespace
 # ============================================================================
-log "Step 2: Tagging and pushing image to Harbor"
-log "  Image: ${HARBOR_IMAGE}:${CASBIN_VERSION}"
-log "  Also tagging as: ${HARBOR_IMAGE}:latest"
-
-docker tag "${IMAGE_NAME}:${CASBIN_VERSION}" "${HARBOR_IMAGE}:${CASBIN_VERSION}" > /dev/null 2>&1 \
-  || die "Failed to tag image with version"
-docker tag "${IMAGE_NAME}:${CASBIN_VERSION}" "${HARBOR_IMAGE}:latest" > /dev/null 2>&1 \
-  || die "Failed to tag image with latest"
-
-docker push "${HARBOR_IMAGE}:${CASBIN_VERSION}" > /dev/null 2>&1 \
-  || die "Failed to push image '${HARBOR_IMAGE}:${CASBIN_VERSION}' to Harbor"
-log "  Pushed ${HARBOR_IMAGE}:${CASBIN_VERSION}: DONE"
-
-docker push "${HARBOR_IMAGE}:latest" > /dev/null 2>&1 \
-  || log "  (non-fatal) Failed to push '${HARBOR_IMAGE}:latest'"
-log "  Pushed ${HARBOR_IMAGE}:latest: DONE"
-
-# ============================================================================
-# Step 3: Create namespace
-# ============================================================================
-log "Step 3: Ensuring namespace '${NAMESPACE}' exists"
+log "Step 2: Ensuring namespace '${NAMESPACE}' exists"
 kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml \
   | kubectl apply -f - > /dev/null 2>&1 \
   || die "Failed to ensure namespace '${NAMESPACE}'"
 log "  Namespace '${NAMESPACE}': READY"
 
 # ============================================================================
-# Step 4: Apply Kustomize manifests
+# Step 3: Apply Kustomize manifests
 # ============================================================================
-log "Step 4: Applying Casbin manifests via Kustomize"
+log "Step 3: Applying Casbin manifests via Kustomize"
 
 # Use standalone kustomize first, fallback to kubectl kustomize
 if ! kustomize build "${KUSTOMIZE_ABS}" > /dev/null 2>&1; then
@@ -158,18 +128,18 @@ fi
 log "  Casbin manifests: APPLIED"
 
 # ============================================================================
-# Step 5: Wait for Deployment rollout
+# Step 4: Wait for Deployment rollout
 # ============================================================================
-log "Step 5: Waiting for Deployment '${DEPLOYMENT_NAME}' rollout"
+log "Step 4: Waiting for Deployment '${DEPLOYMENT_NAME}' rollout"
 kubectl -n "${NAMESPACE}" rollout status deployment/"${DEPLOYMENT_NAME}" \
   --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
   || die "Deployment '${DEPLOYMENT_NAME}' rollout did not complete within ${WAIT_TIMEOUT}"
 log "  Deployment '${DEPLOYMENT_NAME}': ROLLOUT COMPLETE"
 
 # ============================================================================
-# Step 6: Gather component statuses for summary
+# Step 5: Gather component statuses for summary
 # ============================================================================
-log "Step 6: Gathering component statuses"
+log "Step 5: Gathering component statuses"
 
 # Deployment status
 DEPLOY_READY=$(kubectl -n "${NAMESPACE}" get deployment "${DEPLOYMENT_NAME}" \
@@ -221,7 +191,7 @@ kubectl -n "${NAMESPACE}" get pods --no-headers 2>/dev/null \
   || echo "    (no pods found)"
 echo ""
 echo "  Kustomize:            ${KUSTOMIZE_ABS}"
-echo "  Docker build:         ${DOCKER_BUILD_ABS}"
+echo "  Build script:         provisioning/dev/scripts/build-casbin.sh"
 echo ""
 echo "==================================="
 
