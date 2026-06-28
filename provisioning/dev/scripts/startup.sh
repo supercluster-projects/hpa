@@ -98,7 +98,10 @@ Pipeline steps:
   22. Install Grafana Dashboards
   23. Install AlertManager
   24. Configure TLS + Routes
-  25. Seed hydration (offline images to Harbor) [SKIP if SEED_DIR unset] (cert-manager, HTTPS, gql, welcome)
+  25. Install Apache Pulsar
+  26. Install ClickHouse
+  27. Deploy Pulsar Function + JDBC Sink
+  28. Seed hydration (offline images to Harbor) [SKIP if SEED_DIR unset]
 
 Environment:
   .env file at project root sourced automatically
@@ -244,7 +247,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=26
+TOTAL_STEPS=28
 
 # Step 0 (tofu) is already done above
 
@@ -283,13 +286,17 @@ step 22 "Install Grafana Dashboards"  ./install-grafana.sh
 step 23 "Install AlertManager"  ./install-alertmanager.sh
 step 24 "Configure TLS + Routes"  ./install-tls.sh
 
-# Step 25: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
+step 25 "Install Apache Pulsar"       ./install-pulsar.sh
+step 26 "Install ClickHouse"          ./install-clickhouse.sh
+step 27 "Deploy Pulsar Function + JDBC Sink"  ./install-function.sh
+
+# Step 28: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
 if [ -n "${SEED_DIR:-}" ]; then
-  log "Step 25: Hydrating Harbor from seed..."
+  log "Step 28: Hydrating Harbor from seed..."
   ./hydrate-harbor.sh 2>&1 || log "  (non-fatal) Harbor hydration had issues"
   ./hydrate-tofu.sh 2>&1 || log "  (non-fatal) Tofu hydration had issues"
 else
-  log "Step 25: SEED_DIR not set — skipping seed hydration"
+  log "Step 28: SEED_DIR not set — skipping seed hydration"
 fi
 
 # ---- Run verification scripts ---------------------------------------------
@@ -308,7 +315,8 @@ fi
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
                      verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
-                     verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
+                     verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh \
+                     verify-pulsar.sh verify-clickhouse.sh verify-analytics.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
 done

@@ -1,0 +1,20 @@
+clickhouseSink:
+  # JDBC ClickHouse Sink configuration for Pulsar IO
+  # Batch-sinks processed telemetry events into ClickHouse
+  tenant: "public"
+  namespace: "default"
+  name: "clickhouse-telemetry-sink"
+  inputs:
+    - "persistent://public/default/processed-events"
+  sinkType: "jdbc-clickhouse"
+  configs:
+    # ClickHouse Database Connection Details
+    jdbcUrl: "jdbc:clickhouse://clickhouse-clickhouse.clickhouse.svc.cluster.local:8123/analytics_db"
+    tableName: "device_metrics"
+    userName: "pulsar_writer"
+    password: "pulsar_writer_secret"
+
+    # Performance settings
+    batchSize: 25000
+    batchTimeMs: 500
+    useTransactions: "false"
