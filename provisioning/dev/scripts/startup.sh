@@ -97,7 +97,8 @@ Pipeline steps:
   21. Install kube-state-metrics
   22. Install Grafana Dashboards
   23. Install AlertManager
-  24. Configure TLS + Routes (cert-manager, HTTPS, gql, welcome)
+  24. Configure TLS + Routes
+  25. Seed hydration (offline images to Harbor) [SKIP if SEED_DIR unset] (cert-manager, HTTPS, gql, welcome)
 
 Environment:
   .env file at project root sourced automatically
@@ -243,7 +244,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=25
+TOTAL_STEPS=26
 
 # Step 0 (tofu) is already done above
 
@@ -282,6 +283,15 @@ step 22 "Install Grafana Dashboards"  ./install-grafana.sh
 step 23 "Install AlertManager"  ./install-alertmanager.sh
 step 24 "Configure TLS + Routes"  ./install-tls.sh
 
+# Step 25: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
+if [ -n "${SEED_DIR:-}" ]; then
+  log "Step 25: Hydrating Harbor from seed..."
+  ./hydrate-harbor.sh 2>&1 || log "  (non-fatal) Harbor hydration had issues"
+  ./hydrate-tofu.sh 2>&1 || log "  (non-fatal) Tofu hydration had issues"
+else
+  log "Step 25: SEED_DIR not set — skipping seed hydration"
+fi
+
 # ---- Run verification scripts ---------------------------------------------
 log ""
 log "========== Running Verification Scripts =========="
@@ -290,6 +300,11 @@ log "========== Running Verification Scripts =========="
 log "--- verify-manifests.sh (static) ---"
 bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreachable"
 
+# If SEED_DIR is set, verify seed artifacts
+if [ -n "${SEED_DIR:-}" ]; then
+  log "--- verify-seed.sh ---"
+  bash ./verify-seed.sh --seed-dir "${SEED_DIR}" 2>&1 || log "  (non-fatal) Seed verification had issues"
+fi
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
                      verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
