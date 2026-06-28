@@ -92,6 +92,11 @@ Pipeline steps:
   16. Bootstrap Infisical Workloads
   17. Install Yugabytedb Distributed SQL
   18. Install Hasura GraphQL Engine
+  19. Install VMSingle (VictoriaMetrics TSDB)
+  20. Install vmagent DaemonSet (metric scraper)
+  21. Install kube-state-metrics
+  22. Install Grafana Dashboards
+  23. Install AlertManager
 
 Environment:
   .env file at project root sourced automatically
@@ -237,7 +242,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=19
+TOTAL_STEPS=24
 
 # Step 0 (tofu) is already done above
 
@@ -269,6 +274,11 @@ step 15 "Install Streaming Workload (Stream-Processor)" \
 step 16 "Bootstrap Infisical Workloads"  ./bootstrap-infisical-workloads.sh
 step 17 "Install Yugabytedb Distributed SQL"  ./install-yugabytedb.sh
 step 18 "Install Hasura GraphQL Engine"  ./install-hasura.sh
+step 19 "Install VMSingle (VictoriaMetrics TSDB)"  ./install-vm-single.sh
+step 20 "Install vmagent DaemonSet"  ./install-vmagent.sh
+step 21 "Install kube-state-metrics"  ./install-kube-state-metrics.sh
+step 22 "Install Grafana Dashboards"  ./install-grafana.sh
+step 23 "Install AlertManager"  ./install-alertmanager.sh
 
 # ---- Run verification scripts ---------------------------------------------
 log ""
@@ -280,7 +290,7 @@ bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreacha
 
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
+                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
                      verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
