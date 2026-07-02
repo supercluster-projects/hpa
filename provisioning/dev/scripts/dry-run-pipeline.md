@@ -2,13 +2,28 @@
 
 **Purpose:** Step-by-step instructions for running the HPA dev cluster provisioning pipeline on a real KVM/libvirt host. This document serves as the operator's manual when KVM hardware becomes available.
 
-**Prerequisites:** A Linux host with KVM/libvirt, 32GB+ RAM, 4+ CPU cores, 100GB+ free disk.
+**Prerequisites:** A Linux host with KVM/libvirt, 32GB+ RAM (31GB acceptable with 22GB available), 4+ CPU cores, 100GB+ free disk.
+
+**Target host (M014):**
+- **Hostname:** firebat
+- **OS:** Fedora 44, Linux 7.0.12-201.fc44.x86_64
+- **CPU Virtualization:** /dev/kvm present and accessible
+- **Memory:** 31 GB total, 22 GB available (minor WARN — below 32 GB recommendation but sufficient for 1 CP + 3 workers)
+- **Disk:** 619 GB free on /dev/nvme0n1p3 (PASS)
+- **Ceph block device:** /dev/nvme1n1 available
+- **Libvirtd:** active and reachable
+- **Bridge network:** hpa-bridge not yet created (needs setup-bridge.sh)
+- **TOOLS:** tofu v1.11.5, helm v3.20.1, kubectl (client), virsh v12.0.0, git v2.54.0, make 4.4.1, OpenSSL 3.5.7, docker 29.5.3, spin 3.6.3
+- **hpa-bridge subnet:** 192.168.122.0/24 — no conflicts detected
+- **Infisical secrets:** Configured with generated keys in .env (INFISICAL_ENCRYPTION_KEY, INFISICAL_ADMIN_PASSWORD, INFISICAL_AUTH_SECRET)
+- **Talos image cache:** ~/.cache/talos-v1.13.5-metal-amd64.qcow2 (204 MB qcow2, 4.15 GB virtual)
+- **Tofu providers:** Cached (siderolabs/talos 0.11.0, dmacvicar/libvirt 0.9.8, hashicorp/null 3.3.0) — tofu validate PASSES
 
 ---
 
 ## Phase 1: Host Setup
 
-Run on the target bridge host (e.g., `hpa-bridge`):
+Run on the target bridge host (e.g., `firebat` or `hpa-bridge`):
 
 ```bash
 # Clone the repo or sync to the bridge host
@@ -24,6 +39,13 @@ cd /path/to/hpa-dev
 # - .env created from .env.example
 # - Talos qcow2 image cached (~500MB)
 # - tofu providers cached
+```
+
+### Alternative: Cache manually (if setup-host.sh already ran)
+
+```bash
+# Cache Talos image + tofu providers independently
+./provisioning/dev/scripts/prep-cache.sh
 ```
 
 ### Verify Host Readiness

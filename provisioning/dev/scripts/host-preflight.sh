@@ -242,7 +242,6 @@ OPT_TOOL_DETAILS=""
 for tool in "${!TOOLS[@]}"; do
   if command -v "${tool}" > /dev/null 2>&1; then
     # Get version
-    local ver
     ver=$(${TOOLS[${tool}]} 2>/dev/null | head -1 | tr -d '\n' | cut -c1-60)
     TOOL_DETAILS="${TOOL_DETAILS} ${tool}(${ver}),"
   else
@@ -254,7 +253,6 @@ done
 # Check optional tools
 for tool in "${!OPT_TOOLS[@]}"; do
   if command -v "${tool}" > /dev/null 2>&1; then
-    local ver
     ver=$(${OPT_TOOLS[${tool}]} 2>/dev/null | head -1 | tr -d '\n' | cut -c1-60)
     OPT_TOOL_DETAILS="${OPT_TOOL_DETAILS} ${tool}(${ver}),"
   else
@@ -293,7 +291,7 @@ if [ "${REQUIRE_TOOLS_ONLY}" != true ]; then
       NET_CONFLICT=false
     else
       # Check if 192.168.122.0/24 is used by other networks
-      local conflict=""
+      conflict=""
       # Check default libvirt network
       if virsh net-dumpxml default 2>/dev/null | grep -q "192.168.122"; then
         conflict="${conflict} libvirt-default(192.168.122)"
@@ -372,7 +370,7 @@ if [ "${REQUIRE_TOOLS_ONLY}" != true ]; then
         # Check if the variable or its TF_VAR_ form is set
         if [ -z "${!VAR_NAME:-}" ] && [ -z "${!TF_VAR_${VAR_NAME}:-}" ]; then
           # Check for placeholder value
-          local val="${!VAR_NAME:-}"
+          val="${!VAR_NAME:-}"
           if echo "${val}" | grep -qi "change-me\|your-"; then
             MISSING_VARS="${MISSING_VARS} ${VAR_NAME}(placeholder)"
           fi
