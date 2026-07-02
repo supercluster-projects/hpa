@@ -112,8 +112,8 @@ run "test_iso_url_format" {
   }
 
   assert {
-    condition     = can(regex("/${var.TALOS_VERSION}/metal-amd64\\.qcow2$", local.iso_url))
-    error_message = "ISO URL '${local.iso_url}' does not end with expected version and qcow2 path"
+    condition     = can(regex("/${var.TALOS_VERSION}/metal-amd64\\.qcow2$", local.qcow2_url))
+    error_message = "ISO URL '${local.qcow2_url}' does not end with expected version and qcow2 path"
   }
 }
 

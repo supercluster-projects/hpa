@@ -3,7 +3,7 @@ terraform {
 
   required_providers {
     libvirt = {
-      source  = "registry.terraform.io/dmacvicar/libvirt"
+      source  = "registry.opentofu.org/dmacvicar/libvirt"
       version = "~> 0.8"
     }
     talos = {
