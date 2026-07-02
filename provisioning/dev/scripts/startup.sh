@@ -137,6 +137,12 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   }
   log "Pre-flight cleanup done."
 
+  # Ensure hpa-bridge network exists before provisioning VMs — libvirt
+  # domains cannot attach to a non-existent bridge.
+  log "Setting up hpa-bridge network..."
+  bash "${SCRIPT_DIR}/setup-bridge.sh" || die "setup-bridge.sh failed"
+  log "hpa-bridge network ready."
+
   # tofu init — always run to ensure lock file is current (provider registry
   # mismatches between Terraform and OpenTofu can cause stale entries).
   log "Running tofu init..."
