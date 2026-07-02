@@ -244,7 +244,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=26
+TOTAL_STEPS=28
 
 # Step 0 (tofu) is already done above
 
