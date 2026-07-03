@@ -38,11 +38,11 @@ DHCP_HOSTS=()
 gen_mac() { local ip="$1"; local last=$(echo "$ip" | awk -F. '{print $4}'); printf "52:54:00:fd:%02x:%02x" $((last >> 8)) $((last & 0xff)); }
 for i in $(seq 0 $((DEV_CP_COUNT - 1))); do
   IP="${CIDR%.*}.$((100 + i))"
-  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-cp-${i}:$(gen_mac $IP):$IP")
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-cp-${i}|$(gen_mac $IP)|$IP")
 done
 for i in $(seq 0 $((DEV_WORKER_COUNT - 1))); do
   IP="${CIDR%.*}.$((110 + i))"
-  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-worker-${i}:$(gen_mac $IP):$IP")
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-worker-${i}|$(gen_mac $IP)|$IP")
 done
 
 # ---- Parse CLI overrides --------------------------------------------------
@@ -100,6 +100,14 @@ fi
 NET_XML=$(mktemp /tmp/hpa-bridge-net-XXXXXX.xml)
 trap 'rm -f "${NET_XML}"' EXIT
 
+# Build static DHCP host entries from DHCP_HOSTS array
+# XML host fragment: <host name=... and <host mac=... and <host ip=...
+HOST_XML=""
+for entry in "${DHCP_HOSTS[@]}"; do
+  IFS='|' read -r name mac ip <<< "$entry"
+  HOST_XML+="      <host name='${name}' mac='${mac}' ip='${ip}'/>"$'\n'
+done
+
 cat > "${NET_XML}" <<EOF
 <network>
   <name>${BRIDGE}</name>
@@ -112,7 +120,7 @@ cat > "${NET_XML}" <<EOF
   <ip address='${GATEWAY}' netmask='${NETMASK}'>
     <dhcp>
       <range start='${DHCP_FULL_START}' end='${DHCP_FULL_END}'/>
-    </dhcp>
+${HOST_XML}    </dhcp>
   </ip>
 </network>
 EOF

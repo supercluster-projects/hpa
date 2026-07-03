@@ -56,42 +56,45 @@ data "talos_machine_configuration" "worker" {
 # libvirt volume. This pre-installed image serves as the read-only backing
 # store for per-node OS disk COW clones, eliminating the ISO boot +
 # install-to-disk cycle.
-resource "libvirt_volume" "talos_base" {
-  name = "talos-base.qcow2"
+resource "libvirt_volume" "talos_iso" {
+  name = "talos-install.iso"
   pool = "default"
 
   create = {
     content = {
-      url = local.qcow2_url
+      url = local.iso_url
+    }
+  }
+}
+
+# Per-VM ISO COW overlays backed by the master ISO.
+# Each overlay file gets unique SELinux labeling per VM.
+resource "libvirt_volume" "iso_clone" {
+  for_each = toset(local.all_node_names)
+
+  name     = "${each.key}-install.iso"
+  pool     = "default"
+  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+
+  backing_store = {
+    path = libvirt_volume.talos_iso.path
+    format = {
+      type = "raw"
     }
   }
 }
 
 # ---------------------------------------------------------------------------
-# Step 2d: OS disk volumes (COW clones of the Talos base qcow2, one per node)
+# Step 2d: OS disk volumes (empty qcow2 disks, one per node)
 # ---------------------------------------------------------------------------
-# Each OS disk is a qcow2 COW clone of the pre-installed Talos base image.
-# The backing_store references the base volume so writes go to the clone,
-# keeping the base image pristine and saving disk space.
+# Each OS disk is an empty qcow2. Talos installs itself to /dev/vda during
+# first-boot from the ISO, writing bootloader + rootfs + var partitions.
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
 
   name     = "${each.key}-os.qcow2"
   pool     = "default"
   capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
-
-  target = {
-    format = {
-      type = "qcow2"
-    }
-  }
-
-  backing_store = {
-    path = libvirt_volume.talos_base.path
-    format = {
-      type = "qcow2"
-    }
-  }
 }
 
 # ---------------------------------------------------------------------------
@@ -113,10 +116,12 @@ resource "libvirt_volume" "ceph_disk" {
 # Step 4: Libvirt domains (VMs)
 # ---------------------------------------------------------------------------
 # Each VM gets:
-#   - OS disk on /dev/vda (virtio bus, COW clone of pre-installed Talos qcow2)
+#   - Talos ISO overlay on SATA bus (first-boot install to disk)
+#   - OS disk on /dev/vda (virtio bus, empty qcow2)
 #   - Workers also get a ceph disk on /dev/vdb (virtio bus, raw)
+#   - Boot order: hd first, cdrom second (ISO on first boot, Talos installs
+#     to disk, subsequent boots use the installed disk)
 #   - One virtio network interface on hpa-bridge (static DHCP lease)
-#   - OS disk backed by the pre-installed Talos qcow2 (Talos running on boot)
 resource "libvirt_domain" "node" {
   for_each = local.node_apply
 
@@ -132,7 +137,7 @@ resource "libvirt_domain" "node" {
     type         = "hvm"
     type_arch    = "x86_64"
     type_machine = "q35"
-    boot_devices = [{ dev = "hd" }]
+    boot_devices = [{ dev = "hd" }, { dev = "cdrom" }]
   }
 
   cpu = {
@@ -161,7 +166,21 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         },
-
+        {
+          source = {
+            volume = {
+              pool   = "default"
+              volume = libvirt_volume.iso_clone[each.key].name
+            }
+          }
+          target = {
+            dev = "sda"
+            bus = "sata"
+          }
+          driver = {
+            type = "raw"
+          }
+        },
       ],
       each.value.type == "worker" ? [
         {
@@ -224,7 +243,7 @@ resource "talos_machine_configuration_apply" "node" {
   machine_configuration_input = each.value.type == "controlplane" ? data.talos_machine_configuration.controlplane.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
   node                        = each.value.ip
   endpoint                    = each.value.ip
-  apply_mode                  = "reboot"
+  apply_mode                  = "no_reboot"
 
   config_patches = [
     yamlencode({
@@ -270,7 +289,7 @@ resource "talos_machine_bootstrap" "this" {
   ]
 
   timeouts = {
-    create = "15m"
+    create = "20m"
   }
 }
 
@@ -287,6 +306,6 @@ resource "talos_cluster_kubeconfig" "this" {
   ]
 
   timeouts = {
-    create = "15m"
+    create = "20m"
   }
 }

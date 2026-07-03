@@ -1,0 +1,13 @@
+DEV_CLUSTER_NAME            = "hpa-dev"
+DEV_CP_COUNT                = 1
+DEV_WORKER_COUNT            = 3
+DEV_VM_CPU                  = 2
+DEV_CP_RAM_MB               = 4096
+DEV_WORKER_RAM_MB           = 3072
+DEV_OS_DISK_SIZE_GB         = 20
+DEV_CEPH_DISK_SIZE_GB       = 20
+DEV_BRIDGE_NAME             = "hpa-bridge"
+DEV_NODE_PREFIX             = "hpa-node"
+DEV_CIDR_BLOCK              = "192.168.122.0/24"
+TALOS_VERSION               = "v1.13.5"
+DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
