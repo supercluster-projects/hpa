@@ -32,8 +32,8 @@
 
 # ---- Log setup: capture all output to startup.log at project root --------
 # Save fd 3 to the raw terminal BEFORE the tee redirect, so that the
-# bootstrap monitor can write real-time progress lines that overwrite each
-# other on screen (\r) without accumulating in startup.log.
+# bootstrap monitor and progress table can write updating lines that
+# overwrite each other on screen without accumulating in startup.log.
 exec 3>&2
 
 STARTUP_LOG="${PROJECT_ROOT}/startup.log"
@@ -118,6 +118,38 @@ done
 
 export KUBECONFIG
 
+# ---- Register all pipeline steps in the progress table -------------------
+# Table is drawn on fd 3 (terminal), updated in-place with ANSI cursor-up.
+table_register "0"  "Provision Talos VMs (OpenTofu)"
+table_register "1"  "Setup hpa-bridge network"
+table_register "2"  "Install Cilium CNI"
+table_register "3"  "Install Rook Ceph"
+table_register "4"  "Install Harbor"
+table_register "5"  "Install Infisical"
+table_register "6"  "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)"
+table_register "7"  "Install Kafka (Strimzi Operator + Cluster)"
+table_register "8"  "Install Spegel P2P OCI Registry Mirror"
+table_register "9"  "Install Casdoor OIDC Provider"
+table_register "10" "Install Casbin gRPC Authorizer"
+table_register "11" "Install Envoy Gateway + Headlamp"
+table_register "12" "Apply SecurityPolicy (Casbin extAuth)"
+table_register "13" "Install GitOps (Kargo + ArgoCD)"
+table_register "14" "Deploy Workloads (Welcome + Counter)"
+table_register "15" "Install Streaming Workload (Stream-Processor)"
+table_register "16" "Bootstrap Infisical Workloads"
+table_register "17" "Install Yugabytedb Distributed SQL"
+table_register "18" "Install Hasura GraphQL Engine"
+table_register "19" "Install VMSingle (VictoriaMetrics)"
+table_register "20" "Install vmagent DaemonSet"
+table_register "21" "Install kube-state-metrics"
+table_register "22" "Install Grafana Dashboards"
+table_register "23" "Install AlertManager"
+table_register "24" "Configure TLS + Routes"
+table_register "25" "Seed hydration (Harbor)"
+
+# Write the initial table to fd 3 before any step starts
+table_redraw
+
 # ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
 if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   log "=========================================================="
@@ -125,7 +157,6 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   log "=========================================================="
   log "tofu dir:     ${TOFU_DIR}"
   log "kubeconfig:   ${KUBECONFIG}"
-  log ""
 
   command -v tofu >/dev/null 2>&1 || die "OpenTofu (tofu) not found in PATH"
 
@@ -134,23 +165,19 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     die "OpenTofu directory not found at ${TOFU_DIR}"
   fi
 
-  # Pre-flight cleanup: destroy existing VMs and OS/ISO volumes (preserves Ceph disks),
-  # then remove stale entries from the tofu state.
-  log "Running pre-flight cleanup..."
+  table_slot_status "0" "⏳"
+
+  # Pre-flight cleanup
   bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" || {
     log "Pre-flight cleanup had failures — continuing anyway."
   }
-  log "Pre-flight cleanup done."
 
-  # Ensure hpa-bridge network exists before provisioning VMs — libvirt
-  # domains cannot attach to a non-existent bridge.
-  log "Setting up hpa-bridge network..."
+  # Setup bridge
+  table_slot_status "1" "⏳"
   bash "${SCRIPT_DIR}/setup-bridge.sh" || die "setup-bridge.sh failed"
-  log "hpa-bridge network ready."
+  table_slot_status "1" "✅"
 
-  # tofu init — always run to ensure lock file is current (provider registry
-  # mismatches between Terraform and OpenTofu can cause stale entries).
-  # Blocks and waits for internet if providers aren't cached locally.
+  # tofu init
   log "Running tofu init..."
   if ! (cd "${TOFU_ABS_DIR}" && tofu init 2>&1); then
     wait_for_internet "tofu init (provider download)"
@@ -158,14 +185,12 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
   fi
 
-  # Verify libvirtd is reachable before attempting apply
+  # Verify libvirtd
   if ! virsh -c qemu:///system list >/dev/null 2>&1; then
     die "libvirtd is not reachable via 'virsh list'. Ensure libvirtd is running and the current user is in the libvirt group."
   fi
-  log "libvirtd reachable."
 
-  log "Running tofu apply -auto-approve (creates 4 Talos VMs)..."
-  log "  Real-time progress shown below (replaces this line):"
+  log "Running tofu apply -auto-approve..."
 
   TFDIR="${TOFU_ABS_DIR}"
   TMP_VARS="${TFDIR}/dev.auto.tfvars"
@@ -233,17 +258,21 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   OS_DISK_PATH="/var/lib/libvirt/images/${DEV_NODE_PREFIX}-cp-0-os.qcow2"
   KUBECONFIG_PATH="${KUBECONFIG}"
 
-  # Start real-time bootstrap monitor in background. It polls Talos API,
-  # disk growth, and service states, writing one \r-overwriting line to fd 3
-  # (the saved terminal fd, bypassing the tee log pipeline).
+  # Start real-time bootstrap monitor in background.
   bash "${SCRIPT_DIR}/monitor-bootstrap.sh" \
     "${CP0_IP}" "${OS_DISK_PATH}" "${KUBECONFIG_PATH}" &
   MONITOR_PID=$!
 
-  # Run tofu apply. The bootstrap monitor on fd 3 provides the real-time
-  # display. The log gets tofu's unfiltered output for post-mortem debugging.
-  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1)
-  TOFU_EXIT=$?
+  # Run tofu apply in background. Every 5s we redraw the table, which
+  # reads the monitor's latest status from the shared file.
+  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1) &
+  TOFU_PID=$!
+
+  while kill -0 ${TOFU_PID} 2>/dev/null; do
+    table_redraw
+    sleep 5
+  done
+  set +e; wait ${TOFU_PID}; TOFU_EXIT=$?; set -e
 
   if [ "${TOFU_EXIT}" -ne 0 ]; then
     log "FAILED: Contents of ${TMP_VARS}:"
@@ -257,7 +286,7 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     die "tofu apply failed"
   fi
 
-  # Kill the bootstrap monitor (kubeconfig is ready)
+  # Kill the bootstrap monitor (tofu apply done)
   kill "${MONITOR_PID}" 2>/dev/null || true
 
   # Write kubeconfig to disk from tofu state output
@@ -268,29 +297,27 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   }
 
   log "tofu apply completed successfully."
+  table_slot_status "0" "✅" ""
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
+  table_slot_status "0" "✅" "(cached)"
   log "kubeconfig already exists — skipping tofu apply."
 else
+  table_slot_status "0" "⏭" "(skipped)"
   log "--skip-tofu set — using existing kubeconfig (if any)."
 fi
 
 # ---- Verify cluster access ------------------------------------------------
-log "=========================================================="
-log "HPA Dev Cluster — Full Bootstrap Pipeline"
-log "=========================================================="
-log "kubeconfig: ${KUBECONFIG}"
+log "Verifying cluster connectivity..."
 
 command -v kubectl >/dev/null 2>&1 || die "kubectl not found"
 command -v helm >/dev/null 2>&1   || die "helm not found"
 [ -f "${KUBECONFIG}" ] || die "kubeconfig not found at ${KUBECONFIG}"
 
-# Quick connectivity check
 if ! kubectl get nodes > /dev/null 2>&1; then
   die "Cannot reach cluster via kubeconfig at ${KUBECONFIG}"
 fi
-log "Cluster reachable."
 NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-log "Nodes: ${NODE_COUNT}"
+log "Cluster reachable (${NODE_COUNT} nodes)."
 
 # ---- Run pipeline ---------------------------------------------------------
 cd "${SCRIPT_DIR}"
@@ -310,10 +337,12 @@ step() {
   local name=$2
   local script=$3
   shift 3
-  log ""
-  log "========== Step ${num}/${TOTAL_STEPS}: ${name} =========="
+  # Update table: mark this step as running
+  table_slot_status "${num}" "⏳"
+  # Redirect script output to the tee pipe (fd 1/2) so it goes to startup.log
+  # The table on fd 3 keeps showing progress independently
   if bash "${script}" "$@" 2>&1; then
-    log "Step ${num}: ${name} — DONE"
+    table_slot_status "${num}" "✅" ""
   else
     die "Step ${num}: ${name} — FAILED (exit code $?)"
   fi
@@ -321,9 +350,7 @@ step() {
 
 TOTAL_STEPS=28
 
-# Step 0 (tofu) is already done above
-
-step 1 "Setup hpa-bridge network"   ./setup-bridge.sh
+# Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
 step 2 "Install Cilium CNI"         ./install-cilium.sh
 step 3 "Install Rook Ceph"          ./install-rook-ceph.sh
 step 4 "Install Harbor"             ./install-harbor.sh
