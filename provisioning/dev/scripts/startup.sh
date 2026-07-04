@@ -150,10 +150,13 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
 
   # tofu init — always run to ensure lock file is current (provider registry
   # mismatches between Terraform and OpenTofu can cause stale entries).
-  # Requires internet to fetch providers if not cached locally.
-  wait_for_internet "tofu init (provider download)"
+  # Blocks and waits for internet if providers aren't cached locally.
   log "Running tofu init..."
-  (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
+  if ! (cd "${TOFU_ABS_DIR}" && tofu init 2>&1); then
+    wait_for_internet "tofu init (provider download)"
+    log "Retrying tofu init with -upgrade..."
+    (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
+  fi
 
   # Verify libvirtd is reachable before attempting apply
   if ! virsh -c qemu:///system list >/dev/null 2>&1; then
@@ -203,8 +206,8 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     URL="${DEV_TALOS_IMAGE_FACTORY_URL}/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba/${TALOS_VERSION}/metal-amd64.iso"
     if [ ! -f "${CACHE}" ]; then
       wait_for_internet "Talos ISO download (factory.talos.dev)"
-      log "Downloading Talos ISO (wget -c, 60s timeout)..."
-      wget -c -O "${CACHE}" --timeout=60 "${URL}" || die "Failed to download Talos ISO from ${URL}"
+      log "Downloading Talos ISO (wget -c, 60s timeout, single try)..."
+      wget -c -O "${CACHE}" --timeout=60 --tries=1 "${URL}" || die "Failed to download Talos ISO from ${URL}"
       log "Download complete."
     fi
     sudo cp "${CACHE}" "${MASTER_ISO}"
@@ -256,6 +259,13 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
 
   # Kill the bootstrap monitor (kubeconfig is ready)
   kill "${MONITOR_PID}" 2>/dev/null || true
+
+  # Write kubeconfig to disk from tofu state output
+  mkdir -p "$(dirname "${KUBECONFIG}")"
+  (cd "${TFDIR}" && tofu output -raw kubeconfig 2>/dev/null) > "${KUBECONFIG}" || {
+    log "WARNING: Failed to extract kubeconfig from tofu state"
+    log "  The cluster may not be fully bootstrapped yet."
+  }
 
   log "tofu apply completed successfully."
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
