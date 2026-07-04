@@ -13,6 +13,9 @@ machine:
     # eth0/eth1 rather than enpXsY; required for consistent bond device naming
     extraKernelArgs:
       - net.ifnames=0
+    # UKI (Unified Kernel Image) conflicts with extraKernelArgs.
+    # Talos v1.13+ defaults to UKI. Explicitly disable for dev env.
+    grubUseUKICmdline: false
   # Expose /dev/vdb as an unused raw block device for Ceph OSDs.
   # Talos will not format or mount it; Ceph claims it directly.
   disks:

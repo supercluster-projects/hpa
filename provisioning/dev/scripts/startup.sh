@@ -31,6 +31,11 @@
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Log setup: capture all output to startup.log at project root --------
+# Save fd 3 to the raw terminal BEFORE the tee redirect, so that the
+# bootstrap monitor can write real-time progress lines that overwrite each
+# other on screen (\r) without accumulating in startup.log.
+exec 3>&2
+
 STARTUP_LOG="${PROJECT_ROOT}/startup.log"
 # Clear the log file at the start of each run so stale output is not confusing.
 : > "${STARTUP_LOG}"
@@ -145,6 +150,8 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
 
   # tofu init — always run to ensure lock file is current (provider registry
   # mismatches between Terraform and OpenTofu can cause stale entries).
+  # Requires internet to fetch providers if not cached locally.
+  wait_for_internet "tofu init (provider download)"
   log "Running tofu init..."
   (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
 
@@ -155,7 +162,7 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   log "libvirtd reachable."
 
   log "Running tofu apply -auto-approve (creates 4 Talos VMs)..."
-  log "  This takes ~5-8 minutes..."
+  log "  Real-time progress shown below (replaces this line):"
 
   TFDIR="${TOFU_ABS_DIR}"
   TMP_VARS="${TFDIR}/dev.auto.tfvars"
@@ -187,16 +194,68 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   log "Contents:"
   while IFS= read -r line; do log "  ${line}"; done < "${TMP_VARS}"
 
-  (cd "${TFDIR}" && tofu apply -auto-approve) || {
+  # Ensure Talos ISO is downloaded and cloned into per-VM volumes.
+  # Each VM gets its own ISO volume copy to avoid SELinux sharing conflicts
+  # (the libvirt provider sets unique SELinux labels per-access).
+  MASTER_ISO="/var/lib/libvirt/images/talos-install.iso"
+  if [ ! -f "${MASTER_ISO}" ]; then
+    CACHE="/tmp/talos-${TALOS_VERSION}.iso"
+    URL="${DEV_TALOS_IMAGE_FACTORY_URL}/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba/${TALOS_VERSION}/metal-amd64.iso"
+    if [ ! -f "${CACHE}" ]; then
+      wait_for_internet "Talos ISO download (factory.talos.dev)"
+      log "Downloading Talos ISO (wget -c, 60s timeout)..."
+      wget -c -O "${CACHE}" --timeout=60 "${URL}" || die "Failed to download Talos ISO from ${URL}"
+      log "Download complete."
+    fi
+    sudo cp "${CACHE}" "${MASTER_ISO}"
+    sudo virsh pool-refresh default 2>/dev/null || true
+    log "Master ISO placed at ${MASTER_ISO}"
+  fi
+
+  # Clone master ISO into per-VM volumes for SELinux isolation.
+  # Each VM needs its own ISO copy so libvirt can set unique SELinux labels.
+  log "Creating per-VM ISO clones..."
+  for node in ${DEV_NODE_PREFIX}-cp-0 ${DEV_NODE_PREFIX}-worker-0 ${DEV_NODE_PREFIX}-worker-1 ${DEV_NODE_PREFIX}-worker-2; do
+    CLONE="/var/lib/libvirt/images/${node}-install.iso"
+    if [ ! -f "${CLONE}" ]; then
+      sudo cp "${MASTER_ISO}" "${CLONE}"
+    fi
+  done
+  sudo virsh pool-refresh default 2>/dev/null || true
+  log "ISO clones ready."
+
+  # Compute CP0 IP from the CIDR block (same formula as locals.tf: base + 100)
+  # Must be derived before tofu apply since outputs don't exist yet.
+  CP0_IP="$(echo "${DEV_CIDR_BLOCK}" | awk -F'[./]' '{printf "%s.%s.%s.100", $1, $2, $3}')"
+  OS_DISK_PATH="/var/lib/libvirt/images/${DEV_NODE_PREFIX}-cp-0-os.qcow2"
+  KUBECONFIG_PATH="${KUBECONFIG}"
+
+  # Start real-time bootstrap monitor in background. It polls Talos API,
+  # disk growth, and service states, writing one \r-overwriting line to fd 3
+  # (the saved terminal fd, bypassing the tee log pipeline).
+  bash "${SCRIPT_DIR}/monitor-bootstrap.sh" \
+    "${CP0_IP}" "${OS_DISK_PATH}" "${KUBECONFIG_PATH}" &
+  MONITOR_PID=$!
+
+  # Run tofu apply. The bootstrap monitor on fd 3 provides the real-time
+  # display. The log gets tofu's unfiltered output for post-mortem debugging.
+  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1)
+  TOFU_EXIT=$?
+
+  if [ "${TOFU_EXIT}" -ne 0 ]; then
     log "FAILED: Contents of ${TMP_VARS}:"
     if [ -f "${TMP_VARS}" ]; then
       while IFS= read -r line; do log "  ${line}"; done < "${TMP_VARS}"
     else
       log "  (file was not created — no env vars were set)"
     fi
+    kill "${MONITOR_PID}" 2>/dev/null || true
     rm -f "${TMP_VARS}"
     die "tofu apply failed"
-  }
+  fi
+
+  # Kill the bootstrap monitor (kubeconfig is ready)
+  kill "${MONITOR_PID}" 2>/dev/null || true
 
   log "tofu apply completed successfully."
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then

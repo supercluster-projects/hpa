@@ -11,4 +11,3 @@ DEV_NODE_PREFIX = "hpa-node"
 DEV_CIDR_BLOCK = "192.168.122.0/24"
 TALOS_VERSION = "v1.13.5"
 DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
-

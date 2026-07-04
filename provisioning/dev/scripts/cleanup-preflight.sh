@@ -64,14 +64,30 @@ else
   log "  No OS volumes found."
 fi
 
-# ---- Step 3: Remove Talos ISO volume --------------------------------------
-log "Step 3: Removing Talos ISO volume..."
-ISO_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-v[0-9].*\.iso$/ {print $1}' || true)
-if [ -n "${ISO_VOL}" ]; then
-  log "  Deleting ISO volume: ${ISO_VOL}"
-  sudo virsh vol-delete --pool default "${ISO_VOL}" 2>/dev/null || true
+# ---- Step 2b: Remove per-VM ISO clone volumes (recreated by startup.sh) ----
+log "Step 2b: Removing per-VM ISO clone volumes..."
+CLONE_VOLS=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '
+  $1 ~ pre && $1 ~ /-install\.iso$/ && $1 !~ /^talos-install\.iso$/ {print $1}' || true)
+if [ -n "${CLONE_VOLS}" ]; then
+  while IFS= read -r vol; do
+    [ -z "${vol}" ] && continue
+    log "  Deleting ISO clone: ${vol}"
+    sudo virsh vol-delete --pool default "${vol}" 2>/dev/null || true
+  done <<< "${CLONE_VOLS}"
+  log "  ISO clones removed."
 else
-  log "  No Talos ISO volume found."
+  log "  No ISO clone volumes found."
+fi
+
+# ---- Step 3: Preserve Talos ISO if version is unchanged -------------------
+log "Step 3: Checking Talos ISO volume..."
+ISO_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-install\.iso/ {print $1}' || true)
+if [ -n "${ISO_VOL}" ]; then
+  log "  Talos ISO volume '${ISO_VOL}' already exists — preserving it (version unchanged)."
+  SKIP_ISO=true
+else
+  log "  No Talos ISO volume found — will be downloaded."
+  SKIP_ISO=false
 fi
 
 # ---- Step 4: Remove talos-base.qcow2 if it exists -------------------------
@@ -88,12 +104,20 @@ fi
 log "Step 5: Removing stale libvirt resources from tofu state..."
 cd "${TOFU_ABS_DIR}"
 
-for res_type in "libvirt_domain.node" "libvirt_volume.os_disk" "libvirt_volume.talos_iso" "libvirt_volume.talos_base" "null_resource.download_talos_iso"; do
+for res_type in "libvirt_domain.node" "libvirt_volume.os_disk" "libvirt_volume.talos_base" "null_resource.download_talos_iso"; do
   for key in $(tofu state list 2>/dev/null | grep "${res_type}" || true); do
     log "  Removing from state: ${key}"
     tofu state rm "${key}" 2>/dev/null || true
   done
 done
+
+# ISO state: only remove if being re-downloaded (version changed)
+if [ "${SKIP_ISO:-false}" = false ]; then
+  for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.talos_iso" || true); do
+    log "  Removing from state: ${key}"
+    tofu state rm "${key}" 2>/dev/null || true
+  done
+fi
 
 # Also remove bootstrap/apply resources that depend on fresh VMs
 for res_type in talos_machine_configuration_apply talos_machine_bootstrap talos_cluster_kubeconfig; do

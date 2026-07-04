@@ -50,39 +50,10 @@ data "talos_machine_configuration" "worker" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 2c: Base Talos qcow2 volume (downloads and imports from image factory)
+# Step 2c: Talos ISO — pre-downloaded by startup.sh via wget -c (resumable)
+# and placed at /var/lib/libvirt/images/talos-install.iso. Not managed
+# by tofu because the libvirt provider's factory download is unreliable.
 # ---------------------------------------------------------------------------
-# Downloads the Talos metal qcow2 image from the image factory as a managed
-# libvirt volume. This pre-installed image serves as the read-only backing
-# store for per-node OS disk COW clones, eliminating the ISO boot +
-# install-to-disk cycle.
-resource "libvirt_volume" "talos_iso" {
-  name = "talos-install.iso"
-  pool = "default"
-
-  create = {
-    content = {
-      url = local.iso_url
-    }
-  }
-}
-
-# Per-VM ISO COW overlays backed by the master ISO.
-# Each overlay file gets unique SELinux labeling per VM.
-resource "libvirt_volume" "iso_clone" {
-  for_each = toset(local.all_node_names)
-
-  name     = "${each.key}-install.iso"
-  pool     = "default"
-  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
-
-  backing_store = {
-    path = libvirt_volume.talos_iso.path
-    format = {
-      type = "raw"
-    }
-  }
-}
 
 # ---------------------------------------------------------------------------
 # Step 2d: OS disk volumes (empty qcow2 disks, one per node)
@@ -95,6 +66,10 @@ resource "libvirt_volume" "os_disk" {
   name     = "${each.key}-os.qcow2"
   pool     = "default"
   capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+
+  target = {
+    format = { type = "qcow2" }
+  }
 }
 
 # ---------------------------------------------------------------------------
@@ -134,10 +109,17 @@ resource "libvirt_domain" "node" {
   autostart   = true
 
   os = {
-    type         = "hvm"
-    type_arch    = "x86_64"
-    type_machine = "q35"
-    boot_devices = [{ dev = "hd" }, { dev = "cdrom" }]
+    type             = "hvm"
+    type_arch        = "x86_64"
+    type_machine     = "q35"
+    loader           = "/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2"
+    loader_readonly  = "yes"
+    loader_type      = "pflash"
+    nv_ram = {
+      nv_ram   = "/var/lib/libvirt/qemu/nvram/${each.key}_VARS.qcow2"
+      template = "/usr/share/edk2/ovmf/OVMF_VARS_4M.qcow2"
+    }
+    boot_devices = [{ dev = "cdrom" }, { dev = "hd" }]
   }
 
   cpu = {
@@ -170,7 +152,7 @@ resource "libvirt_domain" "node" {
           source = {
             volume = {
               pool   = "default"
-              volume = libvirt_volume.iso_clone[each.key].name
+              volume = "${each.key}-install.iso"
             }
           }
           target = {
