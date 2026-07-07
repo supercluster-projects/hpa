@@ -205,6 +205,19 @@ resource "libvirt_domain" "node" {
       }
     ]
 
+    # Serial file logging per node — captured at /var/log/libvirt/qemu/<name>-boot.log
+    # File-based serial replaces interactive pty; talosctl handles API access.
+    serials = [
+      {
+        type = "file"
+        source = {
+          path = "/var/log/libvirt/qemu/${each.key}-boot.log"
+        }
+        target_port = "0"
+        target_type = "isa-serial"
+      }
+    ]
+
     # VNC graphics omitted: libvirt provider 0.9.8 has a known bug where
     # the graphics element vanishes on read-back, causing apply failure.
     # VMs are headless (provisioned via serial console / talosctl).

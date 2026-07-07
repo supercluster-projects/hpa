@@ -286,4 +286,14 @@ run "test_vm_uses_uefi_firmware" {
     condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.nv_ram.template, "") != ""
     error_message = "VM must have NVRAM template configured for persistent UEFI variables"
   }
+
+  assert {
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].serials[0].type, "") == "file"
+    error_message = "VM serial must be type=file for boot log capture"
+  }
+
+  assert {
+    condition     = can(regex("-boot\\.log$", try(libvirt_domain.node["hpa-node-cp-0"].serials[0].source.path, "")))
+    error_message = "VM serial source path must end with -boot.log"
+  }
 }
