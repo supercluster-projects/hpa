@@ -148,21 +148,6 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         },
-        {
-          source = {
-            volume = {
-              pool   = "default"
-              volume = "${each.key}-install.iso"
-            }
-          }
-          target = {
-            dev = "sda"
-            bus = "sata"
-          }
-          driver = {
-            type = "raw"
-          }
-        },
       ],
       each.value.type == "worker" ? [
         {
