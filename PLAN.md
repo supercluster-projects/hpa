@@ -44,9 +44,9 @@ To prove that Milestone 1 foundations are fully operational:
 
 ### Slices & Tasks
 *   **Slice 2.1: Kargo Controller Installation**
-    *   [ ] **Task M2.1.1:** Deploy the Kargo Operator on the Hub cluster in the `kargo` namespace.
-    *   [ ] **Task M2.1.2:** Configure Kargo's internal credential store to securely access Harbor registries and private GitHub repositories.
-    *   [ ] **Task M2.1.3:** Install the Kargo CLI tool on the management workstation.
+    *   [x] **Task M2.1.1:** Deploy the Kargo Operator on the Hub cluster in the `kargo` namespace.
+    *   [x] **Task M2.1.2:** Configure Kargo's internal credential store to securely access Harbor registries and private GitHub repositories.
+    *   [x] **Task M2.1.3:** Install the Kargo CLI tool on the management workstation.
 *   **Slice 2.2: Declaring Warehouses & Stages**
     *   [ ] **Task M2.2.1:** Create Kargo `Warehouse` resources to monitor Harbor for new OCI container images.
     *   [ ] **Task M2.2.2:** Declare sequential `Stage` resources in Kargo matching cluster environments (`dev` $\rightarrow$ `staging` $\rightarrow$ `production`).
