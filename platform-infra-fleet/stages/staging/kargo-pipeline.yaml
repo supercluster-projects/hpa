@@ -1,0 +1,66 @@
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Warehouse
+metadata:
+  name: fleet-warehouse
+  namespace: kargo
+spec:
+  subscriptions:
+    - image:
+        repoURL: harbor.harbor.svc.cluster.local/library/hpa-workloads
+        imageSelectionStrategy: SemVer
+  freightCreationPolicy: Automatic
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: dev
+  namespace: kargo
+spec:
+  requestedFreight:
+    - warehouse: fleet-warehouse
+  promotionMechanisms:
+    gitByAndCommit:
+      - repoURL: https://github.com/your-org/platform-infra-fleet.git
+        writeBranch: dev
+        helm:
+          - chart: platform-fleet
+            valuesFile: stages/dev/values.yaml
+            imageKey: image.tag
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: staging
+  namespace: kargo
+spec:
+  requestedFreight:
+    - warehouse: fleet-warehouse
+      stages:
+        - dev
+  promotionMechanisms:
+    gitByAndCommit:
+      - repoURL: https://github.com/your-org/platform-infra-fleet.git
+        writeBranch: staging
+        helm:
+          - chart: platform-fleet
+            valuesFile: stages/staging/values.yaml
+            imageKey: image.tag
+---
+apiVersion: kargo.akuity.io/v1alpha1
+kind: Stage
+metadata:
+  name: production
+  namespace: kargo
+spec:
+  requestedFreight:
+    - warehouse: fleet-warehouse
+      stages:
+        - staging
+  promotionMechanisms:
+    gitByAndCommit:
+      - repoURL: https://github.com/your-org/platform-infra-fleet.git
+        writeBranch: main
+        helm:
+          - chart: platform-fleet
+            valuesFile: stages/production/values.yaml
+            imageKey: image.tag

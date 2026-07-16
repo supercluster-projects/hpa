@@ -48,9 +48,9 @@ To prove that Milestone 1 foundations are fully operational:
     *   [x] **Task M2.1.2:** Configure Kargo's internal credential store to securely access Harbor registries and private GitHub repositories.
     *   [x] **Task M2.1.3:** Install the Kargo CLI tool on the management workstation.
 *   **Slice 2.2: Declaring Warehouses & Stages**
-    *   [ ] **Task M2.2.1:** Create Kargo `Warehouse` resources to monitor Harbor for new OCI container images.
-    *   [ ] **Task M2.2.2:** Declare sequential `Stage` resources in Kargo matching cluster environments (`dev` $\rightarrow$ `staging` $\rightarrow$ `production`).
-    *   [ ] **Task M2.2.3:** Map each Stage destination to its corresponding Git branch or subdirectory inside the `platform-infra-fleet` repository.
+    *   [x] **Task M2.2.1:** Create Kargo `Warehouse` resources to monitor Harbor for new OCI container images.
+    *   [x] **Task M2.2.2:** Declare sequential `Stage` resources in Kargo matching cluster environments (`dev` $\rightarrow$ `staging` $\rightarrow$ `production`).
+    *   [x] **Task M2.2.3:** Map each Stage destination to its corresponding Git branch or subdirectory inside the `platform-infra-fleet` repository.
 *   **Slice 2.3: Automated Promotion Pipelines**
     *   [ ] **Task M2.3.1:** Define automated promotion policies where Kargo automatically triggers promotion from `dev` to `staging` upon successful CI checks.
     *   [ ] **Task M2.3.2:** Write a declarative promo mechanism utilizing git commit-writing to inject the newly detected image tags into target Helm values.
