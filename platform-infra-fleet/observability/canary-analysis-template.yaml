@@ -1,0 +1,23 @@
+# Argo Rollouts AnalysisTemplate for VictoriaMetrics metrics polling (M4 Task M4.3.3)
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: http-error-rate-analysis
+  namespace: hpa-workloads
+spec:
+  # Formulates metrics queries triggered during progressive canaries (M4 Task M4.3.3)
+  metrics:
+    - name: success-rate
+      interval: 30s
+      successCondition: result[0] >= 0.99
+      # Failure limit: if the condition fails 2 consecutive times, abort the canary immediately
+      failureLimit: 2
+      provider:
+        prometheus:
+          # Targets the central Hub VictoriaMetrics TSDB Endpoint (M4 Task M4.3.3)
+          address: http://vmsingle-observability.observability.svc.cluster.local:8428
+          # PromQL query analyzing HTTP error rates on the canary pods
+          query: |
+            sum(rate(http_requests_total{status=~"2.*", app="{{args.app-name}}", route="canary"}[1m]))
+            /
+            sum(rate(http_requests_total{app="{{args.app-name}}", route="canary"}[1m]))

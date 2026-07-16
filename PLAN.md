@@ -121,10 +121,10 @@ To prove that Milestone 3 developer integration is fully operational:
     *   [x] **Task M4.2.2:** Implement a unified `CiliumNodeConfig` to explicitly target Spoke VM interfaces (`eth0` on local LibVirt, appropriate provider interfaces in prod).
     *   [x] **Task M4.2.3:** Map L2 Announcement policies on spokes to coordinate IP pools with local subnet gateway configurations.
 *   **Slice 4.3: Metric-Driven Automated Canaries**
-    *   [ ] **Task M4.3.1:** Deploy central VictoriaMetrics TSDB on the Hub cluster.
-    *   [ ] **Task M4.3.2:** Install the lightweight `vmagent` scraper on Spoke clusters to scrape local metrics and securely stream them to VictoriaMetrics.
-    *   [ ] **Task M4.3.3:** Design an Argo `AnalysisTemplate` resource. Configure it to query VictoriaMetrics for HTTP error rates and latency metrics during a Canary promotion.
-    *   [ ] **Task M4.3.4:** Validate closed-loop rollback: simulate an application bug, watch VictoriaMetrics error rates spike, and verify that Kargo/Argo Rollouts automatically aborts and reverts the deployment in Git.
+    *   [x] **Task M4.3.1:** Deploy central VictoriaMetrics TSDB on the Hub cluster.
+    *   [x] **Task M4.3.2:** Install the lightweight `vmagent` scraper on Spoke clusters to scrape local metrics and securely stream them to VictoriaMetrics.
+    *   [x] **Task M4.3.3:** Design an Argo `AnalysisTemplate` resource. Configure it to query VictoriaMetrics for HTTP error rates and latency metrics during a Canary promotion.
+    *   [x] **Task M4.3.4:** Validate closed-loop rollback: simulate an application bug, watch VictoriaMetrics error rates spike, and verify that Kargo/Argo Rollouts automatically aborts and reverts the deployment in Git.
 
 ### 🧪 Verification & Concrete Testing (M4)
 To prove that Milestone 4 secure parity and closed-loop rollback are fully operational:

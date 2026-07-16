@@ -1,0 +1,42 @@
+# Argo Rollout Definition with Closed-Loop Metrics Analysis (M4 Task M4.3.4)
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: demo-counter-service
+  namespace: hpa-workloads
+spec:
+  replicas: 5
+  strategy:
+    canary:
+      # Exposes stable and active services for traffic splitting
+      stableService: demo-counter-stable
+      canaryService: demo-counter-canary
+      # Automated progressive delivery steps
+      steps:
+        - setWeight: 10
+        # Wait 30s to gather initial telemetry data
+        - pause: { duration: 30s }
+        # Trigger live metrics analysis (M4 Task M4.3.4)
+        - analysis:
+            templates:
+              - templateName: http-error-rate-analysis
+            args:
+              - name: app-name
+                value: demo-counter-service
+        - setWeight: 50
+        - pause: { duration: 60s }
+        - setWeight: 100
+  selector:
+    matchLabels:
+      app: demo-counter-service
+  template:
+    metadata:
+      labels:
+        app: demo-counter-service
+    spec:
+      containers:
+        - name: service
+          image: harbor.harbor.svc.cluster.local/library/demo-counter:stable-v1.0
+          ports:
+            - containerPort: 8080
+              name: http
