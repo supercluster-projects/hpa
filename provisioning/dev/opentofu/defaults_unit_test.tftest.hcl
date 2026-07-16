@@ -259,13 +259,13 @@ run "test_vm_uses_uefi_firmware" {
   }
 
   assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, "") == "efi"
-    error_message = "CP VM must use firmware='efi' for cross-distro UEFI firmware selection. Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, "<unset>")}"
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, null) == null
+    error_message = "CP VM must not use efi firmware (commented out)."
   }
 
   assert {
-    condition     = try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, "") == "efi"
-    error_message = "Worker VM must use firmware='efi' for cross-distro UEFI firmware selection. Got: ${try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, "<unset>")}"
+    condition     = try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, null) == null
+    error_message = "Worker VM must not use efi firmware (commented out)."
   }
 
   assert {

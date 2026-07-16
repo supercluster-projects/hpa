@@ -366,7 +366,11 @@ step() {
   local num=$1
   local name=$2
   local script=$3
+  local verify_script=${4:-""}
   shift 3
+  if [ -n "${verify_script}" ]; then
+    shift
+  fi
 
   log "============================================================"
   log ">>> Starting Step ${num}: ${name}"
@@ -377,56 +381,74 @@ step() {
   # Redirect script output to the tee pipe (fd 1/2) so it goes to startup.log
   # The table on fd 3 keeps showing progress independently
   if bash "${script}" "$@" 2>&1; then
-    table_slot_status "${num}" "✅" ""
-    log "============================================================"
-    log ">>> Completed Step ${num}: ${name} — SUCCESS"
-    log "============================================================"
+    if [ -n "${verify_script}" ]; then
+      log ">>> Running live verification for Step ${num}: ${verify_script}..."
+      if bash "${verify_script}" 2>&1; then
+        table_slot_status "${num}" "✅" ""
+        log "============================================================"
+        log ">>> Completed Step ${num}: ${name} — SUCCESS"
+        log "============================================================"
+      else
+        local code=$?
+        table_slot_status "${num}" "❌" "verification failed"
+        log "============================================================"
+        log ">>> Step ${num}: ${name} — VERIFICATION FAILED (exit code ${code})"
+        log "============================================================"
+        die "Step ${num}: ${name} — VERIFICATION FAILED (exit code ${code})"
+      fi
+    else
+      table_slot_status "${num}" "✅" ""
+      log "============================================================"
+      log ">>> Completed Step ${num}: ${name} — SUCCESS"
+      log "============================================================"
+    fi
   else
     local code=$?
+    table_slot_status "${num}" "❌" "installation failed"
     log "============================================================"
-    log ">>> Step ${num}: ${name} — FAILED (exit code ${code})"
+    log ">>> Step ${num}: ${name} — INSTALLATION FAILED (exit code ${code})"
     log "============================================================"
-    die "Step ${num}: ${name} — FAILED (exit code ${code})"
+    die "Step ${num}: ${name} — INSTALLATION FAILED (exit code ${code})"
   fi
 }
 
 TOTAL_STEPS=29
 
 # Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
-step 2 "Install Cilium CNI"         ./install-cilium.sh
-step 3 "Install Rook Ceph"          ./install-rook-ceph.sh
-step 4 "Install Harbor"             ./install-harbor.sh
-step 5 "Install Infisical"          ./install-infisical.sh
+step 2 "Install Cilium CNI"         ./install-cilium.sh ./verify-cilium.sh
+step 3 "Install Rook Ceph"          ./install-rook-ceph.sh ./verify-ceph.sh
+step 4 "Install Harbor"             ./install-harbor.sh ./verify-harbor.sh
+step 5 "Install Infisical"          ./install-infisical.sh ./verify-infisical.sh
 step 6 "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)" \
-                                     ./install-runtimes.sh
+                                     ./install-runtimes.sh ./verify-runtimes.sh
 step 7 "Install Kafka (Strimzi Operator + Cluster)" \
-                                     ./install-kafka.sh
+                                     ./install-kafka.sh ./verify-kafka.sh
 step 8 "Install Spegel P2P OCI Registry Mirror" \
-                                     ./install-spegel.sh
+                                     ./install-spegel.sh ./verify-spegel.sh
 step 9 "Install Casdoor OIDC Provider" \
-                                     ./install-casdoor.sh
+                                     ./install-casdoor.sh ./verify-casdoor.sh
 step 10 "Install Casbin gRPC Authorizer" \
-                                     ./install-casbin.sh
+                                     ./install-casbin.sh ./verify-casbin.sh
 step 11 "Install Envoy Gateway + Headlamp" \
-                                     ./install-gateway.sh
+                                     ./install-gateway.sh ./verify-gateway.sh
 step 12 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
-                                     ./install-security-policy.sh
+                                     ./install-security-policy.sh ./verify-security-policy.sh
 step 13 "Install GitOps (Kargo + ArgoCD)" \
-                                     ./install-gitops.sh
+                                     ./install-gitops.sh ./verify-gitops.sh
 step 14 "Deploy Workloads (Welcome + Counter)" \
-                                     ./install-workloads.sh
+                                     ./install-workloads.sh ./verify-workloads.sh
 step 15 "Install Streaming Workload (Stream-Processor)" \
-                                     ./install-streaming-workload.sh
-step 16 "Bootstrap Infisical Workloads"  ./bootstrap-infisical-workloads.sh
-step 17 "Install Yugabytedb Distributed SQL"  ./install-yugabytedb.sh
-step 18 "Install Hasura GraphQL Engine"  ./install-hasura.sh
-step 19 "Install VMSingle (VictoriaMetrics TSDB)"  ./install-vm-single.sh
+                                     ./install-streaming-workload.sh ./verify-streaming-workload.sh
+step 16 "Bootstrap Infisical Workloads"  ./bootstrap-infisical-workloads.sh ./verify-infisical-workloads.sh
+step 17 "Install Yugabytedb Distributed SQL"  ./install-yugabytedb.sh ./verify-yugabytedb.sh
+step 18 "Install Hasura GraphQL Engine"  ./install-hasura.sh ./verify-hasura.sh
+step 19 "Install VMSingle (VictoriaMetrics TSDB)"  ./install-vm-single.sh ./verify-vm.sh
 step 20 "Install vmagent DaemonSet"  ./install-vmagent.sh
 step 21 "Install kube-state-metrics"  ./install-kube-state-metrics.sh
-step 22 "Install Grafana Dashboards"  ./install-grafana.sh
-step 23 "Install AlertManager"  ./install-alertmanager.sh
-step 24 "Configure TLS + Routes"  ./install-tls.sh
-step 26 "Install CouchDB Document Store" ./install-couchdb.sh
+step 22 "Install Grafana Dashboards"  ./install-grafana.sh ./verify-grafana.sh
+step 23 "Install AlertManager"  ./install-alertmanager.sh ./verify-observability.sh
+step 24 "Configure TLS + Routes"  ./install-tls.sh ./verify-tls.sh
+step 26 "Install CouchDB Document Store" ./install-couchdb.sh ./verify-couchdb.sh
 
 # Step 25: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
 if [ -n "${SEED_DIR:-}" ]; then

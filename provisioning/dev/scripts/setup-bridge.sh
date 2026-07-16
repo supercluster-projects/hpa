@@ -79,10 +79,12 @@ NETWORK_ADDR="${CIDR%/*}"
 # ---- Step 1: Check if bridge already exists -------------------------------
 echo "[$(date +%H:%M:%S)] Checking if network '${BRIDGE}' exists..." >&2
 if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Nothing to do. Exiting." >&2
-  exit 0
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Destroying and undefining for fresh creation with latest DHCP leases..." >&2
+  virsh -c qemu:///system net-destroy "${BRIDGE}" >/dev/null 2>&1 || true
+  virsh -c qemu:///system net-undefine "${BRIDGE}" >/dev/null 2>&1 || true
+else
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Will create." >&2
 fi
-echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Will create." >&2
 
 # ---- Step 2: Prepare network XML ------------------------------------------
 # Build DHCP range: if DHCP_START starts with '.', prepend the network prefix

@@ -146,11 +146,35 @@ metadata:
   name: hpa-dev-l2-policy
 spec:
   interfaces:
-    - enp1s0
+    - eth0
   externalIPs: true
   loadBalancerIPs: true
 EOF
 log "  CiliumL2AnnouncementPolicy 'hpa-dev-l2-policy': APPLIED"
+
+# ---- Step 5b: Apply CiliumNodeConfig 'hpa-dev-node-config' -----------------
+log "Step 5b: Applying CiliumNodeConfig 'hpa-dev-node-config' to bind eth0"
+cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+  || die "Failed to apply CiliumNodeConfig"
+apiVersion: cilium.io/v2
+kind: CiliumNodeConfig
+metadata:
+  name: hpa-dev-node-config
+  namespace: kube-system
+spec:
+  nodeSelector: {}
+  defaults:
+    devices: "eth0"
+EOF
+log "  CiliumNodeConfig 'hpa-dev-node-config': APPLIED"
+
+# ---- Step 5c: Rollout restart Cilium DaemonSet to apply new device config ---
+log "Step 5c: Restarting Cilium DaemonSet to pick up device config"
+kubectl -n kube-system rollout restart ds/cilium > /dev/null 2>&1 \
+  || die "Failed to restart Cilium DaemonSet"
+kubectl -n kube-system rollout status ds/cilium --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
+  || die "Cilium restart status check failed"
+log "  Cilium DaemonSet restarted successfully."
 
 # ---- Step 6: Verify LB pool is recognized ---------------------------------
 log "Step 6: Verifying CiliumLoadBalancerIPPool is recognized"
