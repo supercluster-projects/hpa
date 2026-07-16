@@ -148,9 +148,9 @@ To prove that Milestone 4 secure parity and closed-loop rollback are fully opera
 
 ### Slices & Tasks
 *   **Slice 5.1: Declarative Spoke Cluster Onboarding**
-    *   [ ] **Task M5.1.1:** Configure an Argo CD `ApplicationSet` generator using Git file generators to dynamically detect new spoke clusters registered in the GitOps repository.
-    *   [ ] **Task M5.1.2:** Implement an onboarding script that registers a newly provisioned LibVirt/QEMU cluster endpoint into the Hub's secrets, initiating immediate platform bootstrapping.
-    *   [ ] **Task M5.1.3:** Verify that new Spoke clusters dynamically receive CNI, Storage classes, and Observability agents within minutes of onboarding.
+    *   [x] **Task M5.1.1:** Configure an Argo CD `ApplicationSet` generator using Git file generators to dynamically detect new spoke clusters registered in the GitOps repository.
+    *   [x] **Task M5.1.2:** Implement an onboarding script that registers a newly provisioned LibVirt/QEMU cluster endpoint into the Hub's secrets, initiating immediate platform bootstrapping.
+    *   [x] **Task M5.1.3:** Verify that new Spoke clusters dynamically receive CNI, Storage classes, and Observability agents within minutes of onboarding.
 *   **Slice 5.2: End-to-End Delivery Simulation & Auditing**
     *   [ ] **Task M5.2.1:** Execute a complete developer simulation: scaffold an application, push commits, promote through staging, and verify deployment onto production spoke clusters.
     *   [ ] **Task M5.2.2:** Verify that Harbor OCI image scanning, container signing via Cosign, and signature validation policies (Kyverno/OPA) reject unsigned images.
