@@ -26,6 +26,11 @@ spec:
           - chart: platform-fleet
             valuesFile: stages/dev/values.yaml
             imageKey: image.tag
+    argoCD:
+      # Forces Kargo to trigger and wait for Argo CD sync status (M2 Task M2.3.3)
+      - apps:
+          - name: platform-fleet-dev
+            namespace: argocd
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
@@ -37,6 +42,8 @@ spec:
     - warehouse: fleet-warehouse
       stages:
         - dev
+  # Enables automated promotion policy from dev to staging (M2 Task M2.3.1)
+  promotionPolicy: Automatic
   promotionMechanisms:
     gitByAndCommit:
       - repoURL: https://github.com/your-org/platform-infra-fleet.git
@@ -45,6 +52,11 @@ spec:
           - chart: platform-fleet
             valuesFile: stages/staging/values.yaml
             imageKey: image.tag
+    argoCD:
+      # Sync status polling & health verification (M2 Task M2.3.3)
+      - apps:
+          - name: platform-fleet-staging
+            namespace: argocd
 ---
 apiVersion: kargo.akuity.io/v1alpha1
 kind: Stage
@@ -64,3 +76,7 @@ spec:
           - chart: platform-fleet
             valuesFile: stages/production/values.yaml
             imageKey: image.tag
+    argoCD:
+      - apps:
+          - name: platform-fleet-production
+            namespace: argocd

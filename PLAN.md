@@ -52,9 +52,9 @@ To prove that Milestone 1 foundations are fully operational:
     *   [x] **Task M2.2.2:** Declare sequential `Stage` resources in Kargo matching cluster environments (`dev` $\rightarrow$ `staging` $\rightarrow$ `production`).
     *   [x] **Task M2.2.3:** Map each Stage destination to its corresponding Git branch or subdirectory inside the `platform-infra-fleet` repository.
 *   **Slice 2.3: Automated Promotion Pipelines**
-    *   [ ] **Task M2.3.1:** Define automated promotion policies where Kargo automatically triggers promotion from `dev` to `staging` upon successful CI checks.
-    *   [ ] **Task M2.3.2:** Write a declarative promo mechanism utilizing git commit-writing to inject the newly detected image tags into target Helm values.
-    *   [ ] **Task M2.3.3:** Enable Argo CD sync status polling inside Kargo to verify the Spoke clusters have reconciled successfully before progressing.
+    *   [x] **Task M2.3.1:** Define automated promotion policies where Kargo automatically triggers promotion from `dev` to `staging` upon successful CI checks.
+    *   [x] **Task M2.3.2:** Write a declarative promo mechanism utilizing git commit-writing to inject the newly detected image tags into target Helm values.
+    *   [x] **Task M2.3.3:** Enable Argo CD sync status polling inside Kargo to verify the Spoke clusters have reconciled successfully before progressing.
 
 ### 🧪 Verification & Concrete Testing (M2)
 To prove that Milestone 2 promotion logic is fully operational:
