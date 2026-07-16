@@ -38,11 +38,11 @@ DHCP_HOSTS=()
 gen_mac() { local ip="$1"; local last=$(echo "$ip" | awk -F. '{print $4}'); printf "52:54:00:fd:%02x:%02x" $((last >> 8)) $((last & 0xff)); }
 for i in $(seq 0 $((DEV_CP_COUNT - 1))); do
   IP="${CIDR%.*}.$((100 + i))"
-  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-cp-${i}:$(gen_mac $IP):$IP")
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-cp-${i}|$(gen_mac $IP)|$IP")
 done
 for i in $(seq 0 $((DEV_WORKER_COUNT - 1))); do
   IP="${CIDR%.*}.$((110 + i))"
-  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-worker-${i}:$(gen_mac $IP):$IP")
+  DHCP_HOSTS+=("${DEV_NODE_PREFIX}-worker-${i}|$(gen_mac $IP)|$IP")
 done
 
 # ---- Parse CLI overrides --------------------------------------------------
@@ -79,10 +79,12 @@ NETWORK_ADDR="${CIDR%/*}"
 # ---- Step 1: Check if bridge already exists -------------------------------
 echo "[$(date +%H:%M:%S)] Checking if network '${BRIDGE}' exists..." >&2
 if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Nothing to do. Exiting." >&2
-  exit 0
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Destroying and undefining for fresh creation with latest DHCP leases..." >&2
+  virsh -c qemu:///system net-destroy "${BRIDGE}" >/dev/null 2>&1 || true
+  virsh -c qemu:///system net-undefine "${BRIDGE}" >/dev/null 2>&1 || true
+else
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Will create." >&2
 fi
-echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Will create." >&2
 
 # ---- Step 2: Prepare network XML ------------------------------------------
 # Build DHCP range: if DHCP_START starts with '.', prepend the network prefix
@@ -100,6 +102,14 @@ fi
 NET_XML=$(mktemp /tmp/hpa-bridge-net-XXXXXX.xml)
 trap 'rm -f "${NET_XML}"' EXIT
 
+# Build static DHCP host entries from DHCP_HOSTS array
+# XML host fragment: <host name=... and <host mac=... and <host ip=...
+HOST_XML=""
+for entry in "${DHCP_HOSTS[@]}"; do
+  IFS='|' read -r name mac ip <<< "$entry"
+  HOST_XML+="      <host name='${name}' mac='${mac}' ip='${ip}'/>"$'\n'
+done
+
 cat > "${NET_XML}" <<EOF
 <network>
   <name>${BRIDGE}</name>
@@ -112,7 +122,7 @@ cat > "${NET_XML}" <<EOF
   <ip address='${GATEWAY}' netmask='${NETMASK}'>
     <dhcp>
       <range start='${DHCP_FULL_START}' end='${DHCP_FULL_END}'/>
-    </dhcp>
+${HOST_XML}    </dhcp>
   </ip>
 </network>
 EOF

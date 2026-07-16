@@ -56,9 +56,11 @@ locals {
     for name, info in local.node_apply : name => format("52:54:00:fd:00:%02x", split(".", info.ip)[3])
   }
 
-  # Talos image factory schematic ID and base image URL
+  # Talos image factory schematic ID and boot assets
   # Uses the "zero" schematic (no customization) matching the selected Talos version
   # Schematic ID: 376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba (official well-known zero schematic)
   talos_schematic_id = "376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba"
-  qcow2_url          = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
+  # ISO image for first-boot installation. VMs boot from ISO, Talos installs
+  # to the empty /dev/vda, then subsequent boots come from the installed disk.
+  iso_url = "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.iso"
 }

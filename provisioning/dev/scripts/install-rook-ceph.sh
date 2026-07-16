@@ -33,7 +33,7 @@ CLUSTER_NAME="${DEV_CLUSTER_NAME}"
 NODE_PREFIX="${DEV_NODE_PREFIX}"
 WORKER_COUNT="${DEV_WORKER_COUNT}"
 POOL_CIDR="${DEV_CIDR_BLOCK}"
-WAIT_TIMEOUT=600
+WAIT_TIMEOUT=1200
 HELM_RELEASE_NAME="rook-ceph"
 HELM_NAMESPACE="rook-ceph"
 CEPH_IMAGE="quay.io/ceph/ceph:${CEPH_VERSION}"
@@ -124,7 +124,7 @@ helm upgrade --install "${HELM_RELEASE_NAME}" rook-release/rook-ceph \
   --version "${ROOK_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "csi.enableRbdDriver=true" \
   --set "csi.enableCephfsDriver=false" \
   --set "csi.enableNfsDriver=false" \
@@ -132,9 +132,15 @@ helm upgrade --install "${HELM_RELEASE_NAME}" rook-release/rook-ceph \
   > /dev/null 2>&1 || die "Helm install/upgrade failed"
 log "  Helm release '${HELM_RELEASE_NAME}': INSTALLED/UPGRADED"
 
-# ---- Brief pause for operator CRD registration ----------------------------
-log "  Waiting for CRDs to register..."
-sleep 5
+# ---- Active wait for operator CRD registration ----------------------------
+log "  Waiting for CephCluster CRD to be established..."
+for i in {1..30}; do
+  if kubectl get crd cephclusters.ceph.rook.io -o jsonpath='{.status.conditions[?(@.type=="Established")].status}' 2>/dev/null | grep -q "True"; then
+    log "  CephCluster CRD: ESTABLISHED"
+    break
+  fi
+  sleep 2
+done
 
 # Verify the operator pod is running
 OPERATOR_POD=""
@@ -163,7 +169,7 @@ for w in "${WORKER_NAMES[@]}"; do
         deviceFilter: \"^vdb$\""
 done
 
-cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+cat <<EOF | kubectl apply -f - \
   || die "Failed to apply CephCluster CR"
 apiVersion: ceph.rook.io/v1
 kind: CephCluster
@@ -173,7 +179,7 @@ metadata:
 spec:
   cephVersion:
     image: ${CEPH_IMAGE}
-    allowUnsupported: false
+    allowUnsupported: true
   dataDirHostPath: /var/lib/rook
   mon:
     count: 3
@@ -181,10 +187,6 @@ spec:
   dashboard:
     enabled: true
     ssl: true
-  network:
-    connections:
-      public:
-        - "${POOL_CIDR}"
   storage:
     useAllNodes: false
     useAllDevices: false
@@ -198,7 +200,7 @@ log "  CephCluster '${CLUSTER_NAME}': APPLIED"
 # Step 4: Apply CephBlockPool 'default.rbd' with replication 1
 # ============================================================================
 log "Step 4: Applying CephBlockPool 'default.rbd' (replication: 1)"
-cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+cat <<EOF | kubectl apply -f - \
   || die "Failed to apply CephBlockPool"
 apiVersion: ceph.rook.io/v1
 kind: CephBlockPool
@@ -215,7 +217,7 @@ log "  CephBlockPool 'default.rbd': APPLIED"
 # Step 5: Apply ceph-rbd StorageClass
 # ============================================================================
 log "Step 5: Applying StorageClass 'ceph-rbd'"
-cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+cat <<EOF | kubectl apply -f - \
   || die "Failed to apply StorageClass"
 apiVersion: storage.k8s.io/v1
 kind: StorageClass
@@ -263,8 +265,8 @@ while [ "${ELAPSED}" -lt "${TIMEOUT_SECONDS}" ]; do
   if [ -z "${CLUSTER_JSON}" ]; then
     log "  CephCluster not yet found (${ELAPSED}s elapsed)..."
   else
-    PHASE=$(echo "${CLUSTER_JSON}" | grep -o '"phase":"[^"]*"' | head -1 || echo '"phase":"unknown"')
-    HEALTH=$(echo "${CLUSTER_JSON}" | grep -o '"health":"[^"]*"' | head -1 || echo '"health":"unknown"')
+    PHASE=$(kubectl -n "${HELM_NAMESPACE}" get cephcluster "${CLUSTER_NAME}" -o jsonpath='{.status.phase}' 2>/dev/null || echo "unknown")
+    HEALTH=$(kubectl -n "${HELM_NAMESPACE}" get cephcluster "${CLUSTER_NAME}" -o jsonpath='{.status.ceph.health}' 2>/dev/null || echo "unknown")
 
     # Track phase transitions
     CURRENT_PHASE="${PHASE}"
@@ -272,7 +274,7 @@ while [ "${ELAPSED}" -lt "${TIMEOUT_SECONDS}" ]; do
       PHASE_HISTORY="${PHASE_HISTORY} -> ${CURRENT_PHASE}"
     fi
 
-    if echo "${PHASE}" | grep -q '"Ready"'; then
+    if [ "${PHASE}" = "Ready" ]; then
       CEPH_READY=true
       log "  CephCluster phase: Ready (${HEALTH}) — AFTER ${ELAPSED}s"
       break

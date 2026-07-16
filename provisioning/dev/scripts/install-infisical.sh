@@ -139,7 +139,7 @@ helm upgrade --install "${HELM_RELEASE_NAME}" infisical/infisical \
   "${HELM_VERSION_FLAGS[@]}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "existingSecret=${BOOTSTRAP_SECRET_NAME}" \
   --set "existingSecretEncryptionKey=encryptionKey" \
   --set "existingSecretAdminPasswordKey=adminPassword" \
@@ -163,7 +163,7 @@ fi
 for deploy_ref in ${INFISICAL_DEPLOYS}; do
   deploy_name="${deploy_ref#deployment.apps/}"
   kubectl -n "${NAMESPACE}" rollout status "deployment/${deploy_name}" \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || die "Deployment '${deploy_name}' rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Deployment '${deploy_name}': ROLLOUT COMPLETE"
 done
@@ -187,7 +187,7 @@ helm upgrade --install "${SECRETS_OP_RELEASE}" infisical/infisical-secrets-opera
   "${HELM_VERSION_FLAGS[@]}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   > /dev/null 2>&1 || die "Secrets Operator Helm install/upgrade failed"
 log "  Helm release '${SECRETS_OP_RELEASE}': INSTALLED/UPGRADED"
 
@@ -204,7 +204,7 @@ fi
 for deploy_ref in ${SECRETS_OP_DEPLOYS}; do
   deploy_name="${deploy_ref#deployment.apps/}"
   kubectl -n "${SECRETS_OP_NAMESPACE}" rollout status "deployment/${deploy_name}" \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || die "Secrets Operator deployment '${deploy_name}' rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Secrets Operator Deployment '${deploy_name}': ROLLOUT COMPLETE"
 done

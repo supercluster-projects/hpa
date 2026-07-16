@@ -112,8 +112,8 @@ run "test_iso_url_format" {
   }
 
   assert {
-    condition     = can(regex("/${var.TALOS_VERSION}/metal-amd64\\.qcow2$", local.iso_url))
-    error_message = "ISO URL '${local.iso_url}' does not end with expected version and qcow2 path"
+    condition     = can(regex("/${var.TALOS_VERSION}/metal-amd64\\.iso$", local.iso_url))
+    error_message = "ISO URL '${local.iso_url}' does not end with expected version and .iso path"
   }
 }
 
@@ -236,4 +236,40 @@ run "test_node_prefix_with_uppercase_fails_validation" {
   expect_failures = [
     var.DEV_NODE_PREFIX,
   ]
+}
+
+run "test_vm_uses_uefi_firmware" {
+  command = plan
+
+  variables {
+    DEV_CLUSTER_NAME            = "hpa-dev"
+    DEV_CP_COUNT                = 1
+    DEV_WORKER_COUNT            = 3
+    DEV_VM_CPU                  = 2
+    DEV_CP_RAM_MB               = 4096
+    DEV_WORKER_RAM_MB           = 3072
+    DEV_OS_DISK_SIZE_GB         = 20
+    DEV_CEPH_DISK_SIZE_GB       = 20
+    DEV_BRIDGE_NAME             = "hpa-bridge"
+    TALOS_VERSION               = "v1.13.5"
+    DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
+    DEV_NODE_PREFIX             = "hpa-node"
+    DEV_CIDR_BLOCK              = "192.168.122.0/24"
+    local_image_path            = "/tmp/dummy-talos.qcow2"
+  }
+
+  assert {
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, null) == null
+    error_message = "CP VM must not use efi firmware (commented out)."
+  }
+
+  assert {
+    condition     = try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, null) == null
+    error_message = "Worker VM must not use efi firmware (commented out)."
+  }
+
+  assert {
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "") == "hd"
+    error_message = "Boot device must be 'hd' (direct disk boot). Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "<unset>")}"
+  }
 }

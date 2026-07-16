@@ -25,7 +25,7 @@ require_env DEV_CLUSTER_NAME
 # ---- Internal defaults (script-internal only) -------------------------
 CLUSTER_NAME="${DEV_CLUSTER_NAME}"
 LB_POOL_CIDR="${DEV_LB_POOL_CIDR}"
-WAIT_TIMEOUT=300
+WAIT_TIMEOUT=900
 HELM_RELEASE_NAME="cilium"
 HELM_NAMESPACE="kube-system"
 
@@ -82,25 +82,43 @@ log "  Cilium Helm repo: READY"
 
 # ---- Step 2: Install/upgrade Cilium via Helm ------------------------------
 log "Step 2: Installing/upgrading Cilium via Helm (version ${CILIUM_VERSION})"
+
+# Extract dynamic Kubernetes API server IP and port from Kubeconfig for Kube-Proxy-Free routing
+API_SERVER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
+API_SERVER_IP=$(echo "${API_SERVER_URL}" | sed -e 's|https://||' -e 's|:.*||')
+API_SERVER_PORT=$(echo "${API_SERVER_URL}" | sed -e 's|.*:||')
+
+log "  Configuring Cilium with Kube-Proxy-Free routing to API server ${API_SERVER_IP}:${API_SERVER_PORT}"
+
 helm upgrade --install "${HELM_RELEASE_NAME}" cilium/cilium \
   --namespace "${HELM_NAMESPACE}" \
   --version "${CILIUM_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "cluster.name=${CLUSTER_NAME}" \
-  --set "kubeProxyReplacement=disabled" \
+  --set "kubeProxyReplacement=true" \
+  --set "k8sServiceHost=${API_SERVER_IP}" \
+  --set "k8sServicePort=${API_SERVER_PORT}" \
   --set "l2announcements.enabled=true" \
   --set "externalIPs.enabled=true" \
   --set "ipam.mode=cluster-pool" \
-  --set "ipam.operator.clusterPoolIPv4PodCIDR=10.0.0.0/16" \
+  --set "ipam.operator.clusterPoolIPv4PodCIDRList={10.0.0.0/16}" \
   --set "ipam.operator.clusterPoolIPv4MaskSize=24" \
-  > /dev/null 2>&1 || die "Helm install/upgrade failed"
+  --set "cgroup.autoMount.enabled=false" \
+  --set "cgroup.hostRoot=/sys/fs/cgroup" \
+  --set "securityContext.capabilities.ciliumAgent={CHOWN,KILL,NET_ADMIN,NET_RAW,IPC_LOCK,SYS_ADMIN,SYS_RESOURCE,DAC_OVERRIDE,FOWNER,SETGID,SETUID}" \
+  --set "securityContext.capabilities.cleanCiliumState={NET_ADMIN,SYS_ADMIN,SYS_RESOURCE}" \
+  --set "hubble.enabled=true" \
+  --set "hubble.relay.enabled=true" \
+  --set "hubble.ui.enabled=true" \
+  --set "hubble.ui.service.type=LoadBalancer" \
+  || die "Helm install/upgrade failed"
 log "  Helm release '${HELM_RELEASE_NAME}': INSTALLED/UPGRADED"
 
 # ---- Step 3: Wait for Cilium DaemonSet rollout ----------------------------
 log "Step 3: Waiting for Cilium DaemonSet rollout"
-kubectl -n "${HELM_NAMESPACE}" rollout status ds/cilium --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+kubectl -n "${HELM_NAMESPACE}" rollout status ds/cilium --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
   || die "Cilium DaemonSet rollout did not complete within ${WAIT_TIMEOUT}"
 log "  Cilium DaemonSet rollout: COMPLETE"
 
@@ -128,11 +146,35 @@ metadata:
   name: hpa-dev-l2-policy
 spec:
   interfaces:
-    - bond0
+    - eth0
   externalIPs: true
   loadBalancerIPs: true
 EOF
 log "  CiliumL2AnnouncementPolicy 'hpa-dev-l2-policy': APPLIED"
+
+# ---- Step 5b: Apply CiliumNodeConfig 'hpa-dev-node-config' -----------------
+log "Step 5b: Applying CiliumNodeConfig 'hpa-dev-node-config' to bind eth0"
+cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+  || die "Failed to apply CiliumNodeConfig"
+apiVersion: cilium.io/v2
+kind: CiliumNodeConfig
+metadata:
+  name: hpa-dev-node-config
+  namespace: kube-system
+spec:
+  nodeSelector: {}
+  defaults:
+    devices: "eth0"
+EOF
+log "  CiliumNodeConfig 'hpa-dev-node-config': APPLIED"
+
+# ---- Step 5c: Rollout restart Cilium DaemonSet to apply new device config ---
+log "Step 5c: Restarting Cilium DaemonSet to pick up device config"
+kubectl -n kube-system rollout restart ds/cilium > /dev/null 2>&1 \
+  || die "Failed to restart Cilium DaemonSet"
+kubectl -n kube-system rollout status ds/cilium --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
+  || die "Cilium restart status check failed"
+log "  Cilium DaemonSet restarted successfully."
 
 # ---- Step 6: Verify LB pool is recognized ---------------------------------
 log "Step 6: Verifying CiliumLoadBalancerIPPool is recognized"

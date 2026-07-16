@@ -207,7 +207,7 @@ WELCOME_STATUS="NOT READY"
 if [ "${WELCOME_APPLIED}" = true ]; then
   # Use kubectl wait with condition=Ready on the Knative Service
   if kubectl -n "${WORKLOADS_NAMESPACE}" wait --for=condition=Ready ksvc/welcome \
-    --timeout="${WAIT_TIMEOUT}" > /dev/null 2>&1; then
+    --timeout="${WAIT_TIMEOUT}s" > /dev/null 2>&1; then
     WELCOME_STATUS="Ready"
     log "  Knative Service 'welcome': READY"
   else
@@ -279,7 +279,7 @@ fi
 log "  Checking for counter Deployment..."
 if kubectl -n "${WORKLOADS_NAMESPACE}" get deployment counter > /dev/null 2>&1; then
   kubectl -n "${WORKLOADS_NAMESPACE}" rollout status deployment/counter \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     && log "  Deployment 'counter': ROLLOUT COMPLETE" \
     || log "  (non-fatal) Deployment 'counter' rollout did not complete within ${WAIT_TIMEOUT}"
 fi

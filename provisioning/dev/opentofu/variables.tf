@@ -127,3 +127,9 @@ variable "DEV_CIDR_BLOCK" {
     error_message = "CIDR block must be a valid IPv4 CIDR notation."
   }
 }
+
+variable "local_image_path" {
+  description = "Path to the cached Talos qcow2 image on the host"
+  type        = string
+  default     = ""
+}

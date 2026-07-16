@@ -133,7 +133,7 @@ helm upgrade --install cert-manager jetstack/cert-manager \
   --version "${CERT_MANAGER_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set installCRDs=true \
   > /dev/null 2>&1 || log "  (non-fatal) cert-manager Helm install will be re-attempted via --atomic"
 
@@ -148,7 +148,7 @@ else
     --version "${CERT_MANAGER_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
+    --timeout "${WAIT_TIMEOUT}s" \
     --set installCRDs=true \
     > /dev/null 2>&1 || die "cert-manager Helm install failed after retry"
   CERT_MANAGER_INSTALLED=true
@@ -159,7 +159,7 @@ fi
 for deploy in cert-manager cert-manager-cainjector cert-manager-webhook; do
   if kubectl -n "${CERT_MANAGER_NAMESPACE}" get deployment "${deploy}" > /dev/null 2>&1; then
     kubectl -n "${CERT_MANAGER_NAMESPACE}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+      --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
       || die "cert-manager deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
     log "  Deployment '${deploy}': ROLLOUT COMPLETE"
   else
@@ -168,7 +168,7 @@ for deploy in cert-manager cert-manager-cainjector cert-manager-webhook; do
 done
 
 # ============================================================================
-# Step 2: Install Knative Serving CRDs and core + Kourier
+# Step 2: Install Knative Serving CRDs and core + Gateway API Controller
 # ============================================================================
 log "Step 2: Installing Knative Serving (${KNATIVE_VERSION})"
 
@@ -182,19 +182,19 @@ for manifest in serving-crds.yaml serving-core.yaml; do
   log "  ${manifest}: APPLIED"
 done
 
-# Install Kourier (separate repo: net-kourier)
-KOURIER_URL="https://github.com/knative/net-kourier/releases/download/${KNATIVE_VERSION}/kourier.yaml"
-log "  Applying kourier.yaml from ${KOURIER_URL}..."
-kubectl apply -f "${KOURIER_URL}" > /dev/null 2>&1 \
-  || die "Failed to apply kourier.yaml from ${KOURIER_URL}"
-log "  kourier.yaml: APPLIED"
+# Install Knative Gateway API Controller (net-gateway-api) instead of Kourier
+GATEWAY_API_URL="https://github.com/knative/net-gateway-api/releases/download/${KNATIVE_VERSION}/gateway-api.yaml"
+log "  Applying net-gateway-api from ${GATEWAY_API_URL}..."
+kubectl apply -f "${GATEWAY_API_URL}" > /dev/null 2>&1 \
+  || die "Failed to apply net-gateway-api from ${GATEWAY_API_URL}"
+log "  net-gateway-api: APPLIED"
 
 KNATIVE_INSTALLED=true
 
 # ============================================================================
-# Step 3: Configure Knative to use Kourier as default ClusterIngress
+# Step 3: Configure Knative to use Envoy Gateway via Gateway API
 # ============================================================================
-log "Step 3: Configuring Knative to use Kourier as default ClusterIngress"
+log "Step 3: Configuring Knative to use Envoy Gateway"
 
 # Wait for config-network ConfigMap to exist
 for i in $(seq 1 12); do
@@ -209,9 +209,31 @@ done
 kubectl patch configmap/config-network \
   -n "${KNATIVE_NAMESPACE}" \
   --type merge \
-  -p '{"data":{"ingress.class":"kourier.ingress.networking.knative.dev"}}' \
+  -p '{"data":{"ingress.class":"gateway-api.ingress.networking.knative.dev"}}' \
   > /dev/null 2>&1 || die "Failed to patch config-network ConfigMap"
-log "  Kourier set as default ingress class: DONE"
+log "  Gateway API set as default ingress class: DONE"
+
+# Create config-gateway ConfigMap to map Knative to Envoy Gateway hpa-dev-gateway
+cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
+  || die "Failed to apply config-gateway ConfigMap"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: config-gateway
+  namespace: ${KNATIVE_NAMESPACE}
+  labels:
+    app.kubernetes.io/component: net-gateway-api
+    app.kubernetes.io/name: knative-serving
+    serving.knative.dev/release: devel
+data:
+  external-gateways: |
+    - class: envoy-gateway
+      gateway: envoy-gateway-system/hpa-dev-gateway
+      service: envoy-gateway-system/hpa-dev-gateway
+      supported-features:
+        - HTTPRouteRequestTimeout
+EOF
+log "  config-gateway ConfigMap applied pointing to Envoy Gateway: DONE"
 
 # Also configure Knative to use Kourier's External IP or the domain
 kubectl patch configmap/config-domain \
@@ -226,23 +248,11 @@ kubectl -n "${KNATIVE_NAMESPACE}" rollout restart deployment/activator controlle
   > /dev/null 2>&1 || true
 log "  Knative controller/activator: restarted"
 
-# Wait for Kourier deployments
-for deploy in net-kourier-controller 3scale-kourier-gateway; do
-  ns="${KOURIER_NAMESPACE}"
-  # Kourier controller is in kourier-system, gateway is also there
-  if kubectl -n "${ns}" get deployment "${deploy}" > /dev/null 2>&1; then
-    kubectl -n "${ns}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
-      || log "  (non-fatal) Deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
-    log "  Deployment '${deploy}': ROLLOUT COMPLETE"
-  fi
-done
-
 # Wait for Knative core deployments
-for deploy in activator autoscaler controller webhook domain-mapping domainmapping-webhook; do
+for deploy in activator autoscaler controller webhook domain-mapping domainmapping-webhook net-gateway-api; do
   if kubectl -n "${KNATIVE_NAMESPACE}" get deployment "${deploy}" > /dev/null 2>&1; then
     kubectl -n "${KNATIVE_NAMESPACE}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+      --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
       || log "  (non-fatal) Deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
     log "  Deployment '${deploy}': ROLLOUT COMPLETE"
   fi
@@ -265,7 +275,7 @@ helm upgrade --install spin-operator \
   --version "${SPIN_OPERATOR_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   > /dev/null 2>&1 || die "spin-operator Helm install failed"
 
 SPIN_OPERATOR_INSTALLED=true
@@ -274,7 +284,7 @@ log "  spin-operator: INSTALLED"
 # Wait for spin-operator deployment
 if kubectl -n "${SPIN_OPERATOR_NAMESPACE}" get deployment spin-operator-controller-manager > /dev/null 2>&1; then
   kubectl -n "${SPIN_OPERATOR_NAMESPACE}" rollout status deployment/spin-operator-controller-manager \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) spin-operator-controller-manager rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Deployment 'spin-operator-controller-manager': ROLLOUT COMPLETE"
 fi
@@ -451,7 +461,7 @@ KEYDB_INSTALLED=true
 # Wait for KeyDB rollout
 if kubectl -n "${KEYDB_NAMESPACE}" get deployment keydb > /dev/null 2>&1; then
   kubectl -n "${KEYDB_NAMESPACE}" rollout status deployment/keydb \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) KeyDB rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Deployment 'keydb': ROLLOUT COMPLETE"
 fi

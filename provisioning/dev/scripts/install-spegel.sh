@@ -177,7 +177,7 @@ helm upgrade --install spegel \
   --version "${SPEGEL_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "spegel.containerdRegistryConfigPath=/etc/cri/conf.d/hosts" \
   > /dev/null 2>&1 || die "Spegel Helm install failed"
 
@@ -191,7 +191,7 @@ log "Step 3: Waiting for Spegel DaemonSet rollout"
 
 if kubectl -n "${SPEGEL_NAMESPACE}" get daemonset spegel > /dev/null 2>&1; then
   kubectl -n "${SPEGEL_NAMESPACE}" rollout status daemonset/spegel \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) DaemonSet rollout did not complete within ${WAIT_TIMEOUT}"
   log "  DaemonSet 'spegel': ROLLOUT COMPLETE"
 fi

@@ -140,7 +140,7 @@ helm upgrade --install kargo kargo/kargo \
   --version "${KARGO_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set service.type=ClusterIP \
   > /dev/null 2>&1 || log "  (non-fatal) Kargo Helm install will be re-attempted via --atomic"
 
@@ -156,7 +156,7 @@ else
     --version "${KARGO_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
+    --timeout "${WAIT_TIMEOUT}s" \
     --set service.type=ClusterIP \
     > /dev/null 2>&1 || die "Kargo Helm install failed after retry"
   KARGO_INSTALLED=true
@@ -167,7 +167,7 @@ fi
 for deploy in kargo kargo-controller; do
   if kubectl -n "${KARGO_NAMESPACE}" get deployment "${deploy}" > /dev/null 2>&1; then
     kubectl -n "${KARGO_NAMESPACE}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+      --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
       || log "  (non-fatal) Deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
     log "  Deployment '${deploy}': ROLLOUT COMPLETE"
   fi
@@ -223,7 +223,7 @@ helm upgrade --install argocd argo/argo-cd \
   --version "${ARGOCD_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set server.service.type=ClusterIP \
   --set configs.params.server.insecure=true \
   > /dev/null 2>&1 || log "  (non-fatal) ArgoCD Helm install will be re-attempted via --atomic"
@@ -239,7 +239,7 @@ else
     --version "${ARGOCD_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
+    --timeout "${WAIT_TIMEOUT}s" \
     --set server.service.type=ClusterIP \
     --set configs.params.server.insecure=true \
     > /dev/null 2>&1 || die "ArgoCD Helm install failed after retry"
@@ -251,7 +251,7 @@ fi
 for deploy in argocd-server argocd-repo-server argocd-application-controller argocd-redis; do
   if kubectl -n "${ARGOCD_NAMESPACE}" get deployment "${deploy}" > /dev/null 2>&1; then
     kubectl -n "${ARGOCD_NAMESPACE}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+      --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
       || log "  (non-fatal) ArgoCD deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
     log "  Deployment '${deploy}': ROLLOUT COMPLETE"
   fi
@@ -260,7 +260,7 @@ done
 # Also wait for argocd-application-controller statefulset if present (some chart versions shift to it)
 if kubectl -n "${ARGOCD_NAMESPACE}" get statefulset argocd-application-controller > /dev/null 2>&1; then
   kubectl -n "${ARGOCD_NAMESPACE}" rollout status statefulset/argocd-application-controller \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) ArgoCD StatefulSet 'argocd-application-controller' rollout did not complete"
   log "  StatefulSet 'argocd-application-controller': ROLLOUT COMPLETE"
 fi

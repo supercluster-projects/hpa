@@ -102,7 +102,7 @@ helm upgrade --install "${PG_RELEASE_NAME}" bitnami/postgresql \
   --namespace "${NAMESPACE}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "global.postgresql.auth.postgresPassword=${PG_PASSWORD}" \
   --set "global.postgresql.auth.username=casdoor" \
   --set "global.postgresql.auth.password=${PG_PASSWORD}" \
@@ -116,7 +116,7 @@ log "  PostgreSQL release '${PG_RELEASE_NAME}': INSTALLED"
 # ---- Step 4: Wait for PostgreSQL StatefulSet rollout ----------------------
 log "Step 4: Waiting for PostgreSQL StatefulSet rollout"
 kubectl -n "${NAMESPACE}" rollout status statefulset "${PG_RELEASE_NAME}-postgresql" \
-  --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+  --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
   || die "PostgreSQL StatefulSet rollout did not complete within ${WAIT_TIMEOUT}"
 log "  PostgreSQL StatefulSet: ROLLOUT COMPLETE"
 
@@ -139,7 +139,7 @@ helm upgrade --install "${CASDOOR_RELEASE_NAME}" \
   --version "${CASDOOR_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "database.driver=postgres" \
   --set "database.host=${CASDOOR_PG_HOST}" \
   --set "database.user=casdoor" \
@@ -157,7 +157,7 @@ log "  Casdoor release '${CASDOOR_RELEASE_NAME}': INSTALLED"
 # ---- Step 7: Wait for Casdoor Deployment rollout --------------------------
 log "Step 7: Waiting for Casdoor Deployment rollout"
 kubectl -n "${NAMESPACE}" rollout status deployment "${CASDOOR_RELEASE_NAME}" \
-  --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+  --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
   || die "Casdoor Deployment rollout did not complete within ${WAIT_TIMEOUT}"
 log "  Casdoor Deployment: ROLLOUT COMPLETE"
 

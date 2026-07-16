@@ -6,37 +6,42 @@
 # bonding) is applied at the talos_machine_configuration_apply step.
 ---
 machine:
-  install:
-    # Install Talos to the first virtio disk (OS disk, /dev/vda in libvirt)
-    disk: /dev/vda
-    # Wipe and re-install Talos so the machine config is applied to a writable
-    # root filesystem. Without this, the pre-installed qcow2 boots as a live
-    # read-only image and etcd/kubelet cannot start.
-    wipe: true
-    # Disable predictable network interface naming so interfaces appear as
-    # eth0/eth1 rather than enpXsY; required for consistent bond device naming
-    extraKernelArgs:
-      - net.ifnames=0
-  # Expose /dev/vdb as an unused raw block device for Ceph OSDs.
-  # Talos will not format or mount it; Ceph claims it directly.
-  disks:
-    - device: /dev/vdb
-# Spegel mirror configuration — enable for distributed image mirroring
-# Spegel provides OCI image mirroring between cluster nodes, reducing
-# registry pull load and improving node startup time.
-#
-# To enable:
-#   1. Uncomment the 'machine.files' block below
-#   2. Ensure SPEGEL_VERSION is set in .env (compatible with Talos v1.13+)
-#   3. Run provisioning/dev/scripts/install-spegel.sh
-#
-# This patch disables discard_unpacked_layers which is enabled by default
-# in Talos. Spegel requires layers to remain on disk for peer serving.
-#
-# machine:
-#   files:
-#     - path: /etc/cri/conf.d/20-customization.part
-#       op: create
-#       content: |
-#         [plugins."io.containerd.cri.v1.images"]
-#           discard_unpacked_layers = false
+  sysctls:
+    net.ipv4.conf.all.rp_filter: "0"
+    net.ipv4.conf.default.rp_filter: "0"
+  env:
+    http_proxy: http://192.168.122.1:10809
+    https_proxy: http://192.168.122.1:10809
+    no_proxy: 127.0.0.1,localhost,192.168.122.0/24,.cluster.local,hpa-node-cp-0,hpa-node-worker-0,hpa-node-worker-1,hpa-node-worker-2
+  time:
+    servers:
+      - 192.168.122.1
+
+  # Spegel mirror configuration — enable for distributed image mirroring
+  # This patch disables discard_unpacked_layers which is enabled by default
+  # in Talos. Spegel requires layers to remain on disk for peer serving.
+  features:
+    kubePrism:
+      enabled: true
+      port: 7445
+
+  kubelet:
+    nodeIP:
+      validSubnets:
+        - 192.168.122.0/24
+
+  files:
+    - path: /etc/cri/conf.d/20-customization.part
+      op: create
+      content: |
+        [plugins."io.containerd.cri.v1.images"]
+          discard_unpacked_layers = false
+
+cluster:
+  # Completely prevent Talos from deploying its native kube-proxy
+  # This enables pure eBPF routing via Cilium CNI (Kube-Proxy-Free mode)
+  proxy:
+    disabled: true
+  network:
+    cni:
+      name: none

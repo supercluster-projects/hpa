@@ -119,7 +119,7 @@ helm upgrade --install envoy-gateway envoy-gateway/envoy-gateway \
   --version "${ENVOY_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   > /dev/null 2>&1 || log "  (non-fatal) Envoy Gateway Helm install will be re-attempted via --atomic"
 
 # Verify Envoy Gateway installed; if not, retry once
@@ -133,7 +133,7 @@ else
     --version "${ENVOY_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
+    --timeout "${WAIT_TIMEOUT}s" \
     > /dev/null 2>&1 || die "Envoy Gateway Helm install failed after retry"
   ENVOY_GATEWAY_INSTALLED=true
   log "  Envoy Gateway: INSTALLED"
@@ -142,7 +142,7 @@ fi
 # Wait for Envoy Gateway DaemonSet rollout
 if kubectl -n "${ENVOY_GATEWAY_NAMESPACE}" get daemonset envoy-gateway > /dev/null 2>&1; then
   kubectl -n "${ENVOY_GATEWAY_NAMESPACE}" rollout status daemonset/envoy-gateway \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || die "Envoy Gateway DaemonSet rollout did not complete within ${WAIT_TIMEOUT}"
   log "  DaemonSet 'envoy-gateway': ROLLOUT COMPLETE"
 else
@@ -274,8 +274,8 @@ helm upgrade --install headlamp headlamp/headlamp \
   --version "${HEADLAMP_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
-  --set service.type=ClusterIP \
+  --timeout "${WAIT_TIMEOUT}s" \
+  --set service.type=LoadBalancer \
   > /dev/null 2>&1 || log "  (non-fatal) Headlamp Helm install will be re-attempted via --atomic"
 
 # Verify Headlamp installed; if not, retry once
@@ -289,8 +289,8 @@ else
     --version "${HEADLAMP_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
-    --set service.type=ClusterIP \
+    --timeout "${WAIT_TIMEOUT}s" \
+    --set service.type=LoadBalancer \
     > /dev/null 2>&1 || die "Headlamp Helm install failed after retry"
   HEADLAMP_INSTALLED=true
   log "  Headlamp: INSTALLED"
@@ -299,7 +299,7 @@ fi
 # Wait for Headlamp deployment rollout
 if kubectl -n "${HEADLAMP_NAMESPACE}" get deployment headlamp > /dev/null 2>&1; then
   kubectl -n "${HEADLAMP_NAMESPACE}" rollout status deployment/headlamp \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || die "Headlamp deployment rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Deployment 'headlamp': ROLLOUT COMPLETE"
 else
