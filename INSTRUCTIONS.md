@@ -88,15 +88,22 @@ bash provisioning/dev/scripts/verify-cilium.sh --kubeconfig provisioning/dev/ope
 
 ## 🔄 5. Testing Progressive Delivery (Kargo + Argo CD)
 
-Once the core is active, we can run Kargo and Argo CD delivery checks.
+Once the core is active, we can run Kargo and Argo CD delivery checks completely locally by utilizing the **Local Host Git Daemon**. This launches a lightweight repository host on your workstation so that virtualized Argo CD/Kargo agents pull directly from your local project filesystem via the bridge gateway IP (`192.168.122.1`).
 
-### Step 5.1: Initialize GitOps Pipeline
+### Step 5.1: Start the Local Git Daemon (Host Side)
+On your workstation host, start the local git service:
+```bash
+bash provisioning/dev/scripts/start-local-git-daemon.sh
+```
+*   *Note:* The daemon runs in the foreground, broadcasting your local filesystem as `git://192.168.122.1/with-gsd` to the virtual machines over the local network bridge. Keep this terminal open during testing.
+
+### Step 5.2: Initialize GitOps Pipeline
 Deploy Kargo and Argo CD controllers to the cluster:
 ```bash
 bash provisioning/dev/scripts/install-gitops.sh --kubeconfig provisioning/dev/opentofu/kubeconfig
 ```
 
-### Step 5.2: Audit Kargo Promotion Pipelines
+### Step 5.3: Audit Kargo Promotion Pipelines
 Apply your Kargo credentials, warehouse, and sequential stage definitions:
 ```bash
 # Apply credential stores and pipeline stages to Spoke Stage namespace
