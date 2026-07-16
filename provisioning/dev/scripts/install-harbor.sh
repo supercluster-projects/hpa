@@ -96,13 +96,13 @@ helm upgrade --install "${HELM_RELEASE_NAME}" harbor/harbor \
   --version "${HARBOR_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   --set "expose.type=clusterIP" \
   --set "expose.tls.enabled=false" \
   --set "service.type=LoadBalancer" \
   --set "persistence.enabled=true" \
   --set "persistence.persistentVolumeClaim.registry.storageClass=${STORAGE_CLASS}" \
-  --set "persistence.persistentVolumeClaim.jobservice.storageClass=${STORAGE_CLASS}" \
+  --set "persistence.persistentVolumeClaim.jobservice.jobLog.storageClass=${STORAGE_CLASS}" \
   --set "persistence.persistentVolumeClaim.database.storageClass=${STORAGE_CLASS}" \
   --set "persistence.persistentVolumeClaim.redis.storageClass=${STORAGE_CLASS}" \
   --set "persistence.persistentVolumeClaim.trivy.storageClass=${STORAGE_CLASS}" \
@@ -117,7 +117,7 @@ log "Step 4: Waiting for Harbor Deployment rollouts"
 for deploy in harbor-core harbor-jobservice harbor-portal harbor-registry harbor-trivy; do
   if kubectl -n "${NAMESPACE}" get deployment "${deploy}" > /dev/null 2>&1; then
     kubectl -n "${NAMESPACE}" rollout status deployment/"${deploy}" \
-      --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+      --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
       || die "Deployment '${deploy}' rollout did not complete within ${WAIT_TIMEOUT}"
     log "  Deployment '${deploy}': ROLLOUT COMPLETE"
   else

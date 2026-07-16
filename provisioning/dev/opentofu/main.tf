@@ -46,6 +46,15 @@ data "talos_machine_configuration" "worker" {
 
   config_patches = [
     file("${path.module}/cluster-config.yaml"),
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
   ]
 }
 
@@ -56,16 +65,35 @@ data "talos_machine_configuration" "worker" {
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Step 2d: OS disk volumes (empty qcow2 disks, one per node)
+# Step 2d: Talos base volume and cloned OS disk volumes
 # ---------------------------------------------------------------------------
-# Each OS disk is an empty qcow2. Talos installs itself to /dev/vda during
-# first-boot from the ISO, writing bootloader + rootfs + var partitions.
+# Base volume pointing to the host-cached Talos qcow2 image (uses v0.9.x schema)
+resource "libvirt_volume" "talos_base" {
+  name = "talos-base.qcow2"
+  pool = "default"
+
+  target = {
+    format = { type = "qcow2" }
+  }
+
+  create = {
+    content = {
+      url = "file://${var.local_image_path}"
+    }
+  }
+}
+
+# OS disk volumes cloned from the base volume (uses v0.9.x schema)
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
-
   name     = "${each.key}-os.qcow2"
   pool     = "default"
   capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+
+  backing_store = {
+    path   = libvirt_volume.talos_base.path
+    format = { type = "qcow2" }
+  }
 
   target = {
     format = { type = "qcow2" }
@@ -73,19 +101,11 @@ resource "libvirt_volume" "os_disk" {
 }
 
 # ---------------------------------------------------------------------------
-# Step 3: Ceph disk volumes (one per worker node, raw, empty)
+# Step 3: Ceph disk volumes (Managed externally on host for persistence)
 # ---------------------------------------------------------------------------
-resource "libvirt_volume" "ceph_disk" {
-  for_each = toset(local.worker_node_names)
-
-  name     = "${each.key}-ceph.raw"
-  pool     = "default"
-  capacity = var.DEV_CEPH_DISK_SIZE_GB * 1073741824
-
-  target = {
-    format = { type = "raw" }
-  }
-}
+# Ceph disks are sparse files created on the host in a dedicated folder.
+# They are not managed directly as libvirt_volume resources in tofu so that
+# their contents survive "tofu destroy" and "tofu apply" cycles.
 
 # ---------------------------------------------------------------------------
 # Step 4: Libvirt domains (VMs)
@@ -94,8 +114,9 @@ resource "libvirt_volume" "ceph_disk" {
 #   - Talos ISO overlay on SATA bus (first-boot install to disk)
 #   - OS disk on /dev/vda (virtio bus, empty qcow2)
 #   - Workers also get a ceph disk on /dev/vdb (virtio bus, raw)
-#   - Boot order: hd first, cdrom second (ISO on first boot, Talos installs
-#     to disk, subsequent boots use the installed disk)
+#   - Boot order: cdrom first, hd second (ISO installs Talos to disk on
+#     first boot; subsequent boots auto-detect installed Talos via ISO
+#     boot menu timer)
 #   - One virtio network interface on hpa-bridge (static DHCP lease)
 resource "libvirt_domain" "node" {
   for_each = local.node_apply
@@ -109,17 +130,11 @@ resource "libvirt_domain" "node" {
   autostart   = true
 
   os = {
-    type             = "hvm"
-    type_arch        = "x86_64"
-    type_machine     = "q35"
-    loader           = "/usr/share/edk2/ovmf/OVMF_CODE_4M.qcow2"
-    loader_readonly  = "yes"
-    loader_type      = "pflash"
-    nv_ram = {
-      nv_ram   = "/var/lib/libvirt/qemu/nvram/${each.key}_VARS.qcow2"
-      template = "/usr/share/edk2/ovmf/OVMF_VARS_4M.qcow2"
-    }
-    boot_devices = [{ dev = "cdrom" }, { dev = "hd" }]
+    type         = "hvm"
+    type_arch    = "x86_64"
+    type_machine = "q35"
+    # firmware     = "efi"
+    boot_devices = [{ dev = "hd" }]
   }
 
   cpu = {
@@ -133,6 +148,8 @@ resource "libvirt_domain" "node" {
   devices = {
     disks = concat(
       [
+        # OS disk: cloned from pre-cached Talos qcow2 image.
+        # Direct disk boot skips CDROM boot menus and avoids installation loops.
         {
           source = {
             volume = {
@@ -150,11 +167,12 @@ resource "libvirt_domain" "node" {
         },
       ],
       each.value.type == "worker" ? [
+        # Ceph disk: file-backed sparse raw disk on the host.
+        # Stored in /var/lib/libvirt/images/ceph-disks so data survives cluster recreation.
         {
           source = {
-            volume = {
-              pool   = "default"
-              volume = libvirt_volume.ceph_disk[each.key].name
+            file = {
+              file = "/var/lib/libvirt/images/ceph-disks/${each.key}-ceph.img"
             }
           }
           target = {
@@ -182,6 +200,8 @@ resource "libvirt_domain" "node" {
       },
     ]
 
+    # Native interactive serial console.
+    # Exposing as PTY enables interactive "virsh console <domain>" access.
     consoles = [
       {
         type        = "pty"
@@ -189,23 +209,6 @@ resource "libvirt_domain" "node" {
         target_type = "serial"
       }
     ]
-
-    # Serial file logging per node — captured at /var/log/libvirt/qemu/<name>-boot.log
-    # File-based serial replaces interactive pty; talosctl handles API access.
-    serials = [
-      {
-        type = "file"
-        source = {
-          path = "/var/log/libvirt/qemu/${each.key}-boot.log"
-        }
-        target_port = "0"
-        target_type = "isa-serial"
-      }
-    ]
-
-    # VNC graphics omitted: libvirt provider 0.9.8 has a known bug where
-    # the graphics element vanishes on read-back, causing apply failure.
-    # VMs are headless (provisioned via serial console / talosctl).
   }
 
 }
@@ -214,8 +217,10 @@ resource "libvirt_domain" "node" {
 # Step 5: Apply Talos machine configuration to each node
 # ---------------------------------------------------------------------------
 # Per-node patches set the hostname and static IP on eth0.
-# Talos boots from the pre-installed disk image, receives config via
-# talosctl, and reboots with the static IP from the machine config.
+# Talos boots from the ISO-installed disk into maintenance mode, receives
+# config via talosctl (apply_mode auto tries 'try' first for maintenance mode,
+# falls back to 'no_reboot' on subsequent runs), and reboots if needed
+# with the static IP from the machine config.
 resource "talos_machine_configuration_apply" "node" {
   for_each = local.node_apply
 
@@ -223,7 +228,7 @@ resource "talos_machine_configuration_apply" "node" {
   machine_configuration_input = each.value.type == "controlplane" ? data.talos_machine_configuration.controlplane.machine_configuration : data.talos_machine_configuration.worker.machine_configuration
   node                        = each.value.ip
   endpoint                    = each.value.ip
-  apply_mode                  = "no_reboot"
+  apply_mode                  = "auto"
 
   config_patches = [
     yamlencode({

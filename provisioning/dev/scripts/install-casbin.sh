@@ -132,7 +132,7 @@ log "  Casbin manifests: APPLIED"
 # ============================================================================
 log "Step 4: Waiting for Deployment '${DEPLOYMENT_NAME}' rollout"
 kubectl -n "${NAMESPACE}" rollout status deployment/"${DEPLOYMENT_NAME}" \
-  --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+  --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
   || die "Deployment '${DEPLOYMENT_NAME}' rollout did not complete within ${WAIT_TIMEOUT}"
 log "  Deployment '${DEPLOYMENT_NAME}': ROLLOUT COMPLETE"
 

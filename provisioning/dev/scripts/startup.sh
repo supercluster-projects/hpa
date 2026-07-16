@@ -146,6 +146,7 @@ table_register "22" "Install Grafana Dashboards"
 table_register "23" "Install AlertManager"
 table_register "24" "Configure TLS + Routes"
 table_register "25" "Seed hydration (Harbor)"
+table_register "26" "Install CouchDB Document Store"
 
 # Write the initial table to fd 3 before any step starts
 table_redraw
@@ -222,35 +223,22 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   log "Contents:"
   while IFS= read -r line; do log "  ${line}"; done < "${TMP_VARS}"
 
-  # Ensure Talos ISO is downloaded and cloned into per-VM volumes.
-  # Each VM gets its own ISO volume copy to avoid SELinux sharing conflicts
-  # (the libvirt provider sets unique SELinux labels per-access).
-  MASTER_ISO="/var/lib/libvirt/images/talos-install.iso"
-  if [ ! -f "${MASTER_ISO}" ]; then
-    CACHE="/tmp/talos-${TALOS_VERSION}.iso"
-    URL="${DEV_TALOS_IMAGE_FACTORY_URL}/376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba/${TALOS_VERSION}/metal-amd64.iso"
-    if [ ! -f "${CACHE}" ]; then
-      wait_for_internet "Talos ISO download (factory.talos.dev)"
-      log "Downloading Talos ISO (wget -c, 60s timeout, single try)..."
-      wget -c -O "${CACHE}" --timeout=60 --tries=1 "${URL}" || die "Failed to download Talos ISO from ${URL}"
-      log "Download complete."
-    fi
-    sudo cp "${CACHE}" "${MASTER_ISO}"
-    sudo virsh pool-refresh default 2>/dev/null || true
-    log "Master ISO placed at ${MASTER_ISO}"
+  # ---- Pre-create host-backed persistent Ceph disk sparse files -----------
+  CEPH_DIR="/var/lib/libvirt/images/ceph-disks"
+  if [ ! -d "${CEPH_DIR}" ]; then
+    log "Creating Ceph persistent disks directory ${CEPH_DIR}..."
+    sudo mkdir -p "${CEPH_DIR}"
+    sudo chmod 755 "${CEPH_DIR}"
   fi
 
-  # Clone master ISO into per-VM volumes for SELinux isolation.
-  # Each VM needs its own ISO copy so libvirt can set unique SELinux labels.
-  log "Creating per-VM ISO clones..."
-  for node in ${DEV_NODE_PREFIX}-cp-0 ${DEV_NODE_PREFIX}-worker-0 ${DEV_NODE_PREFIX}-worker-1 ${DEV_NODE_PREFIX}-worker-2; do
-    CLONE="/var/lib/libvirt/images/${node}-install.iso"
-    if [ ! -f "${CLONE}" ]; then
-      sudo cp "${MASTER_ISO}" "${CLONE}"
+  for worker in ${DEV_NODE_PREFIX}-worker-0 ${DEV_NODE_PREFIX}-worker-1 ${DEV_NODE_PREFIX}-worker-2; do
+    DISK_PATH="${CEPH_DIR}/${worker}-ceph.img"
+    if [ ! -f "${DISK_PATH}" ]; then
+      log "Creating persistent sparse Ceph disk for ${worker} (${DEV_CEPH_DISK_SIZE_GB} GiB)..."
+      sudo truncate -s "${DEV_CEPH_DISK_SIZE_GB}G" "${DISK_PATH}"
+      sudo chmod 666 "${DISK_PATH}"
     fi
   done
-  sudo virsh pool-refresh default 2>/dev/null || true
-  log "ISO clones ready."
 
   # Compute CP0 IP from the CIDR block (same formula as locals.tf: base + 100)
   # Must be derived before tofu apply since outputs don't exist yet.
@@ -296,6 +284,36 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     log "  The cluster may not be fully bootstrapped yet."
   }
 
+  # Generate talosconfig programmatically from tofu state output
+  python3 -c "
+import json, subprocess
+try:
+    out = subprocess.check_output(['tofu', 'output', '-json'], cwd='${TFDIR}')
+    outputs = json.loads(out)
+    tc = outputs['talosconfig']['value']
+    config = f'''context: hpa-dev
+contexts:
+  hpa-dev:
+    ca: {tc['ca_certificate']}
+    crt: {tc['client_certificate']}
+    endpoints:
+    - 192.168.122.100
+    - 192.168.122.110
+    - 192.168.122.111
+    - 192.168.122.112
+    key: {tc['client_key']}
+    nodes:
+    - 192.168.122.100
+    - 192.168.122.110
+    - 192.168.122.111
+    - 192.168.122.112
+'''
+    with open('${TFDIR}/talosconfig', 'w') as f:
+        f.write(config)
+except Exception as e:
+    print('WARNING: Failed to generate talosconfig:', e)
+" 2>/dev/null || true
+
   log "tofu apply completed successfully."
   table_slot_status "0" "✅" ""
 elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
@@ -313,9 +331,21 @@ command -v kubectl >/dev/null 2>&1 || die "kubectl not found"
 command -v helm >/dev/null 2>&1   || die "helm not found"
 [ -f "${KUBECONFIG}" ] || die "kubeconfig not found at ${KUBECONFIG}"
 
-if ! kubectl get nodes > /dev/null 2>&1; then
+log "Waiting for cluster nodes to become reachable..."
+WAIT_OK=false
+for i in {1..120}; do
+  if kubectl get nodes >/dev/null 2>&1; then
+    WAIT_OK=true
+    break
+  fi
+  log "  Kubernetes API not ready yet, retrying in 5s... ($i/120)"
+  sleep 5
+done
+
+if [ "${WAIT_OK}" = false ]; then
   die "Cannot reach cluster via kubeconfig at ${KUBECONFIG}"
 fi
+
 NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
 log "Cluster reachable (${NODE_COUNT} nodes)."
 
@@ -337,18 +367,30 @@ step() {
   local name=$2
   local script=$3
   shift 3
+
+  log "============================================================"
+  log ">>> Starting Step ${num}: ${name}"
+  log "============================================================"
+
   # Update table: mark this step as running
   table_slot_status "${num}" "⏳"
   # Redirect script output to the tee pipe (fd 1/2) so it goes to startup.log
   # The table on fd 3 keeps showing progress independently
   if bash "${script}" "$@" 2>&1; then
     table_slot_status "${num}" "✅" ""
+    log "============================================================"
+    log ">>> Completed Step ${num}: ${name} — SUCCESS"
+    log "============================================================"
   else
-    die "Step ${num}: ${name} — FAILED (exit code $?)"
+    local code=$?
+    log "============================================================"
+    log ">>> Step ${num}: ${name} — FAILED (exit code ${code})"
+    log "============================================================"
+    die "Step ${num}: ${name} — FAILED (exit code ${code})"
   fi
 }
 
-TOTAL_STEPS=28
+TOTAL_STEPS=29
 
 # Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
 step 2 "Install Cilium CNI"         ./install-cilium.sh
@@ -384,6 +426,7 @@ step 21 "Install kube-state-metrics"  ./install-kube-state-metrics.sh
 step 22 "Install Grafana Dashboards"  ./install-grafana.sh
 step 23 "Install AlertManager"  ./install-alertmanager.sh
 step 24 "Configure TLS + Routes"  ./install-tls.sh
+step 26 "Install CouchDB Document Store" ./install-couchdb.sh
 
 # Step 25: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
 if [ -n "${SEED_DIR:-}" ]; then
@@ -409,7 +452,7 @@ if [ -n "${SEED_DIR:-}" ]; then
 fi
 # Runtime checks
 for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
+                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-couchdb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
                      verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
   log "--- ${verify_script} ---"
   bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"

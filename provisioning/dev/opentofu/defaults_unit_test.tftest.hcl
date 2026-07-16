@@ -255,45 +255,21 @@ run "test_vm_uses_uefi_firmware" {
     DEV_TALOS_IMAGE_FACTORY_URL = "https://factory.talos.dev/image"
     DEV_NODE_PREFIX             = "hpa-node"
     DEV_CIDR_BLOCK              = "192.168.122.0/24"
+    local_image_path            = "/tmp/dummy-talos.qcow2"
   }
 
   assert {
-    condition     = can(regex("OVMF_CODE", try(libvirt_domain.node["hpa-node-cp-0"].os.loader, "")))
-    error_message = "CP VM must use OVMF UEFI loader. Got loader: ${try(libvirt_domain.node["hpa-node-cp-0"].os.loader, "<unset>")}"
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, "") == "efi"
+    error_message = "CP VM must use firmware='efi' for cross-distro UEFI firmware selection. Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.firmware, "<unset>")}"
   }
 
   assert {
-    condition     = can(regex("OVMF_CODE", try(libvirt_domain.node["hpa-node-worker-0"].os.loader, "")))
-    error_message = "Worker VM must use OVMF UEFI loader. Got loader: ${try(libvirt_domain.node["hpa-node-worker-0"].os.loader, "<unset>")}"
+    condition     = try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, "") == "efi"
+    error_message = "Worker VM must use firmware='efi' for cross-distro UEFI firmware selection. Got: ${try(libvirt_domain.node["hpa-node-worker-0"].os.firmware, "<unset>")}"
   }
 
   assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "") == "cdrom"
-    error_message = "First boot device must be cdrom (ISO first boot). Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "<unset>")}"
-  }
-
-  assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.loader_readonly, "no") == "yes"
-    error_message = "OVMF loader must be read-only. Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.loader_readonly, "<unset>")}"
-  }
-
-  assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.loader_type, "") == "pflash"
-    error_message = "OVMF loader type must be pflash. Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.loader_type, "<unset>")}"
-  }
-
-  assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.nv_ram.template, "") != ""
-    error_message = "VM must have NVRAM template configured for persistent UEFI variables"
-  }
-
-  assert {
-    condition     = try(libvirt_domain.node["hpa-node-cp-0"].serials[0].type, "") == "file"
-    error_message = "VM serial must be type=file for boot log capture"
-  }
-
-  assert {
-    condition     = can(regex("-boot\\.log$", try(libvirt_domain.node["hpa-node-cp-0"].serials[0].source.path, "")))
-    error_message = "VM serial source path must end with -boot.log"
+    condition     = try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "") == "hd"
+    error_message = "Boot device must be 'hd' (direct disk boot). Got: ${try(libvirt_domain.node["hpa-node-cp-0"].os.boot_devices[0].dev, "<unset>")}"
   }
 }

@@ -117,7 +117,7 @@ helm upgrade --install strimzi-kafka-operator strimzi/strimzi-kafka-operator \
   --version "${STRIMZI_VERSION}" \
   --atomic \
   --wait \
-  --timeout "${WAIT_TIMEOUT}" \
+  --timeout "${WAIT_TIMEOUT}s" \
   > /dev/null 2>&1 || log "  (non-fatal) Strimzi Helm install will be re-attempted via --atomic"
 
 # Verify Strimzi operator installed; if not, retry once
@@ -131,7 +131,7 @@ else
     --version "${STRIMZI_VERSION}" \
     --atomic \
     --wait \
-    --timeout "${WAIT_TIMEOUT}" \
+    --timeout "${WAIT_TIMEOUT}s" \
     > /dev/null 2>&1 || die "Strimzi operator Helm install failed after retry"
   STRIMZI_OPERATOR_INSTALLED=true
   log "  Strimzi operator: INSTALLED"
@@ -140,7 +140,7 @@ fi
 # Wait for Strimzi operator rollout
 if kubectl -n "${STRIMZI_NAMESPACE}" get deployment strimzi-cluster-operator > /dev/null 2>&1; then
   kubectl -n "${STRIMZI_NAMESPACE}" rollout status deployment/strimzi-cluster-operator \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || die "Strimzi operator rollout did not complete within ${WAIT_TIMEOUT}"
   log "  Deployment 'strimzi-cluster-operator': ROLLOUT COMPLETE"
 else
@@ -221,7 +221,7 @@ log "  Waiting for Kafka cluster rollout..."
 # Wait for ZooKeeper StatefulSet
 if kubectl -n "${STRIMZI_NAMESPACE}" get statefulset "${CLUSTER_NAME}-zookeeper" > /dev/null 2>&1; then
   kubectl -n "${STRIMZI_NAMESPACE}" rollout status statefulset/"${CLUSTER_NAME}-zookeeper" \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) ZooKeeper StatefulSet rollout did not complete within ${WAIT_TIMEOUT}"
   log "  StatefulSet '${CLUSTER_NAME}-zookeeper': ROLLOUT COMPLETE"
 fi
@@ -229,7 +229,7 @@ fi
 # Wait for Kafka StatefulSet
 if kubectl -n "${STRIMZI_NAMESPACE}" get statefulset "${CLUSTER_NAME}-kafka" > /dev/null 2>&1; then
   kubectl -n "${STRIMZI_NAMESPACE}" rollout status statefulset/"${CLUSTER_NAME}-kafka" \
-    --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 \
+    --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 \
     || log "  (non-fatal) Kafka StatefulSet rollout did not complete within ${WAIT_TIMEOUT}"
   log "  StatefulSet '${CLUSTER_NAME}-kafka': ROLLOUT COMPLETE"
 fi

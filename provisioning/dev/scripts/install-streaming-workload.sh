@@ -155,7 +155,7 @@ else
   # Wait briefly for KeyDB to become ready
   log "  KeyDB has 0 ready replicas, waiting up to ${WAIT_TIMEOUT}s..."
   if kubectl --kubeconfig "${KUBECONFIG}" -n "${KEYDB_NAMESPACE}" rollout status deployment/keydb \
-    --timeout="${WAIT_TIMEOUT}" > /dev/null 2>&1; then
+    --timeout="${WAIT_TIMEOUT}s" > /dev/null 2>&1; then
     KEYDB_AVAILABLE=true
     log "  KeyDB: AVAILABLE (after rollout wait)"
   else
@@ -291,7 +291,7 @@ if [ "${STREAM_PROCESSOR_APPLIED}" = true ]; then
     # Check if the underlying deployment exists and is ready
     if kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" get deployment stream > /dev/null 2>&1; then
       kubectl --kubeconfig "${KUBECONFIG}" -n "${WORKLOADS_NAMESPACE}" rollout status deployment/stream \
-        --timeout "${WAIT_TIMEOUT}" > /dev/null 2>&1 && \
+        --timeout "${WAIT_TIMEOUT}s" > /dev/null 2>&1 && \
         log "  Deployment 'stream': ROLLOUT COMPLETE" || \
         log "  (non-fatal) Deployment 'stream' rollout did not complete within ${WAIT_TIMEOUT}"
     fi
