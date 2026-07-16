@@ -16,9 +16,9 @@ The roadmap is structured into **5 sequential Milestones**, each divided into hi
     *   [x] **Task M1.1.2:** Configure host networking and verify external routing (e.g., DNS access to Harbor and Git repositories).
     *   [x] **Task M1.1.3:** Setup admin access credentials, storage classes, and configure RBAC roles for platform engineers.
 *   **Slice 1.2: GitOps Repository & Organizational Layout**
-    *   [ ] **Task M1.2.1:** Create the central platform repository: `platform-infra-fleet` (for hosting Kubernetes cluster blueprints, Argo CD ApplicationSets, and core helm charts).
-    *   [ ] **Task M1.2.2:** Define the directory structure for environment overlays (e.g., `stages/dev/`, `stages/staging/`, `stages/production/`).
-    *   [ ] **Task M1.2.3:** Create a template repository format for application source repositories (to be used later by Backstage Scaffolder).
+    *   [x] **Task M1.2.1:** Create the central platform repository: `platform-infra-fleet` (for hosting Kubernetes cluster blueprints, Argo CD ApplicationSets, and core helm charts).
+    *   [x] **Task M1.2.2:** Define the directory structure for environment overlays (e.g., `stages/dev/`, `stages/staging/`, `stages/production/`).
+    *   [x] **Task M1.2.3:** Create a template repository format for application source repositories (to be used later by Backstage Scaffolder).
 *   **Slice 1.3: Argo CD Bootstrap on Hub**
     *   [ ] **Task M1.3.1:** Deploy Argo CD on the Hub cluster in High-Availability (HA) mode under the `argocd` namespace.
     *   [ ] **Task M1.3.2:** Enable the `ApplicationSet` controller and configure cluster-generator selectors.
