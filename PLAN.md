@@ -80,10 +80,10 @@ To prove that Milestone 2 promotion logic is fully operational:
 **Goal:** Deploy Backstage as the central Developer Portal and implement developer self-service templates.
 
 ### Slices & Tasks
-*   **Slice 3.1: Backstage Base Deployment**
-    *   [ ] **Task M3.1.1:** Build a customized Backstage Docker image with essential plugins pre-installed.
-    *   [ ] **Task M3.1.2:** Deploy Backstage on the Hub cluster and configure database persistence (e.g., PostgreSQL).
-    *   [ ] **Task M3.1.3:** Integrate Backstage authentication with the Casdoor OIDC provider for secure single sign-on (SSO).
+**Slice 3.1: Backstage Base Deployment**
+    *   [x] **Task M3.1.1:** Build a customized Backstage Docker image with essential plugins pre-installed.
+    *   [x] **Task M3.1.2:** Deploy Backstage on the Hub cluster and configure database persistence (e.g., PostgreSQL).
+    *   [x] **Task M3.1.3:** Integrate Backstage authentication with the Casdoor OIDC provider for secure single sign-on (SSO).
 *   **Slice 3.2: Golden Path Software Templates & Scaffolder**
     *   [ ] **Task M3.2.1:** Design a Backstage Scaffolder template for a **"Secure Go Microservice"** including rootless Dockerfiles, standard Go codebase, and ready Helm charts.
     *   [ ] **Task M3.2.2:** Configure the template Scaffolder steps to auto-create private repositories on Git and register them instantly in the Backstage Software Catalog.
