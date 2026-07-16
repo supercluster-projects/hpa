@@ -1,0 +1,129 @@
+# Backstage Software Template for Golden Path Secure Go Microservice (M3 Task M3.2.1, M3.2.2 & M3.2.3)
+apiVersion: scaffolder.backstage.io/v1beta3
+kind: Template
+metadata:
+  name: secure-go-service
+  title: Golden Path Secure Go Microservice
+  description: Create a production-ready, enterprise-compliant Go microservice with rootless Docker, Helm charts, and GitOps plumbing pre-configured.
+spec:
+  owner: platform-engineering
+  type: service
+
+  # Form Parameters for the Developer Wizard
+  parameters:
+    - title: Provide Service Metadata
+      required:
+        - name:
+        - owner:
+      properties:
+        name:
+          title: Service Name
+          type: string
+          description: Unique name of the microservice (lowercase, alphanumeric).
+        description:
+          title: Description
+          type: string
+          description: Brief summary of the service's purpose.
+        owner:
+          title: Owner Team
+          type: string
+          description: Target team that owns this service.
+          default: guests
+
+    - title: Choose Repository Location
+      required:
+        - repoUrl:
+      properties:
+        repoUrl:
+          title: Repository Location
+          type: string
+          ui:field: RepoUrlPicker
+          ui:options:
+            allowedHosts:
+              - github.com
+
+  # Executed Scaffolder Steps (M3 Task M3.2.2 & M3.2.3)
+  steps:
+    # Step 1: Fetch the skeleton structure created in Milestone 1
+    - id: template
+      name: Fetching Golden Path Skeleton
+      action: fetch:template
+      input:
+        url: ./templates/app-source-template
+        values:
+          name: ${{ parameters.name }}
+          description: ${{ parameters.description }}
+          owner: ${{ parameters.owner }}
+
+    # Step 2: Publish Code Base to Private Git Repository (Task M3.2.2)
+    - id: publish
+      name: Creating Private GitHub Repository
+      action: publish:github
+      input:
+        allowedHosts: ['github.com']
+        description: ${{ parameters.description }}
+        repoUrl: ${{ parameters.repoUrl }}
+        repoVisibility: private
+        defaultBranch: main
+
+    # Step 3: GitOps Auto-Wiring — Write Kargo & ArgoCD Manifests (Task M3.2.3)
+    - id: gitops-wire
+      name: Generating and Writing GitOps Manifests to platform-infra-fleet
+      action: write:file
+      input:
+        # Appends Kargo Warehouse and Argo CD Application manifests directly to GitOps repo
+        path: ./stages/dev/${{ parameters.name }}-gitops-manifests.yaml
+        content: |
+          apiVersion: argoproj.io/v1alpha1
+          kind: Application
+          metadata:
+            name: 'platform-fleet-${{ parameters.name }}'
+            namespace: argocd
+          spec:
+            project: default
+            source:
+              repoURL: 'https://github.com/${{ steps.publish.output.owner }}/${{ steps.publish.output.project }}.git'
+              targetRevision: HEAD
+              path: deploy/
+            destination:
+              server: https://kubernetes.default.svc
+              namespace: 'hpa-workloads-${{ parameters.name }}'
+            syncPolicy:
+              automated:
+                prune: true
+                selfHeal: true
+              syncOptions:
+                - CreateNamespace=true
+          ---
+          apiVersion: kargo.akuity.io/v1alpha1
+          kind: Stage
+          metadata:
+            name: '${{ parameters.name }}-dev'
+            namespace: kargo
+          spec:
+            requestedFreight:
+              - warehouse: fleet-warehouse
+            promotionMechanisms:
+              gitByAndCommit:
+                - repoURL: https://github.com/your-org/platform-infra-fleet.git
+                  writeBranch: dev
+                  helm:
+                    - chart: ${{ parameters.name }}
+                      valuesFile: stages/dev/values.yaml
+                      imageKey: image.tag
+
+    # Step 4: Register Component in the Backstage Software Catalog (Task M3.2.2)
+    - id: register
+      name: Registering Component in Software Catalog
+      action: catalog:register
+      input:
+        repoContentsUrl: ${{ steps.publish.output.repoContentsUrl }}
+        catalogInfoPath: '/catalog-info.yaml'
+
+  # Execution Outputs
+  output:
+    links:
+      - title: Repository Link
+        url: ${{ steps.publish.output.remoteUrl }}
+      - title: Catalog Dashboard Link
+        url: ${{ steps.register.output.catalogInfoUrl }}

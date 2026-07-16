@@ -85,9 +85,9 @@ To prove that Milestone 2 promotion logic is fully operational:
     *   [x] **Task M3.1.2:** Deploy Backstage on the Hub cluster and configure database persistence (e.g., PostgreSQL).
     *   [x] **Task M3.1.3:** Integrate Backstage authentication with the Casdoor OIDC provider for secure single sign-on (SSO).
 *   **Slice 3.2: Golden Path Software Templates & Scaffolder**
-    *   [ ] **Task M3.2.1:** Design a Backstage Scaffolder template for a **"Secure Go Microservice"** including rootless Dockerfiles, standard Go codebase, and ready Helm charts.
-    *   [ ] **Task M3.2.2:** Configure the template Scaffolder steps to auto-create private repositories on Git and register them instantly in the Backstage Software Catalog.
-    *   [ ] **Task M3.2.3:** Implement GitOps auto-wiring: write the corresponding Kargo `Warehouse` and Argo CD `Application` manifests into `platform-infra-fleet` during scaffolding.
+    *   [x] **Task M3.2.1:** Design a Backstage Scaffolder template for a **"Secure Go Microservice"** including rootless Dockerfiles, standard Go codebase, and ready Helm charts.
+    *   [x] **Task M3.2.2:** Configure the template Scaffolder steps to auto-create private repositories on Git and register them instantly in the Backstage Software Catalog.
+    *   [x] **Task M3.2.3:** Implement GitOps auto-wiring: write the corresponding Kargo `Warehouse` and Argo CD `Application` manifests into `platform-infra-fleet` during scaffolding.
 *   **Slice 3.3: Backstage GitOps Plugins Integration**
     *   [ ] **Task M3.3.1:** Integrate the `@backstage/plugin-argocd` plugin into the Backstage portal.
     *   [ ] **Task M3.3.2:** Wire the Argo CD plugin with live cluster endpoints to expose deployment sync status, health, and pod states inside each catalog component's dashboard.
