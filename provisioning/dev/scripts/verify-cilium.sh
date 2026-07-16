@@ -206,8 +206,8 @@ fi
 # Phase 5: Optional cilium CLI status
 # ============================================================================
 if [ "${CILIUM_CLI}" = true ]; then
-  log "Phase 5: Running cilium status --brief"
-  CILIUM_STATUS_OUTPUT=$(cilium status --brief 2>&1) || true
+  log "Phase 5: Running cilium status"
+  CILIUM_STATUS_OUTPUT=$(cilium status 2>&1) || true
 
   if echo "${CILIUM_STATUS_OUTPUT}" | grep -qi "ok" || echo "${CILIUM_STATUS_OUTPUT}" | grep -qi "healthy"; then
     PHASE5_STATUS="PASS"
