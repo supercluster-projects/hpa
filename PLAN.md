@@ -7,6 +7,11 @@ The roadmap is structured into **5 sequential Milestones**, each divided into hi
 
 ---
 
+## ⚠️ Core Testing Mandates
+*   **Fresh Environment Guarantee:** **On every set of test runs, the cluster must be completely recreated first.** The test suite must strictly abort if a clean teardown/cleaving of the host hypervisor (cleanup) fails, ensuring zero resource pollution or configuration drift carry-over between test runs.
+
+---
+
 ## Milestone 1 (M1): Foundations & Hub Cluster Setup
 **Goal:** Establish the centralized Management Plane (Hub cluster) and the fundamental GitOps repository wiring.
 

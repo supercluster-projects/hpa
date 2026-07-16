@@ -52,11 +52,11 @@ log "======================================================================"
 cd "${SCRIPT_DIR}"
 
 # ============================================================================
-# Phase 1: Environment Preflight & Cleanup
+# Phase 1: Environment Preflight & Cleanup (Strict Recreation Gate)
 # ============================================================================
-log "Phase 1: Cleaving host environment..."
+log "Phase 1: Cleaving host environment to guarantee clean cluster recreation..."
 if ! bash "./cleanup.sh"; then
-  log "  WARNING: cleanup.sh reported failures. Proceeding anyway..."
+  die "cleanup.sh failed. Unable to clean and guarantee fresh cluster recreation. Aborting test run."
 fi
 log "Phase 1: CLEAN"
 
