@@ -118,9 +118,21 @@ log "  Rook Helm repo: READY"
 # Step 2: Install/upgrade rook-ceph-operator via Helm
 # ============================================================================
 log "Step 2: Installing/upgrading rook-ceph-operator via Helm"
+
+# Pre-create and label namespace as privileged to satisfy PodSecurity standards (M4/M5 PSS gate fix)
+kubectl create namespace "${HELM_NAMESPACE}" --dry-run=client -o yaml \
+  | kubectl apply -f - > /dev/null 2>&1 \
+  || die "Failed to ensure namespace '${HELM_NAMESPACE}'"
+kubectl label namespace "${HELM_NAMESPACE}" \
+  pod-security.kubernetes.io/enforce=privileged \
+  pod-security.kubernetes.io/audit=privileged \
+  pod-security.kubernetes.io/warn=privileged \
+  --overwrite > /dev/null 2>&1 \
+  || die "Failed to label namespace '${HELM_NAMESPACE}' as privileged"
+log "  Namespace '${HELM_NAMESPACE}': CONFIGURED PRIVILEGED"
+
 helm upgrade --install "${HELM_RELEASE_NAME}" rook-release/rook-ceph \
   --namespace "${HELM_NAMESPACE}" \
-  --create-namespace \
   --version "${ROOK_VERSION}" \
   --atomic \
   --wait \
