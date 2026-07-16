@@ -1,0 +1,34 @@
+# Argo CD ApplicationSet with dynamic Git File Generator (M5 Task M5.1.1)
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: dynamic-spoke-bootstrap
+  namespace: argocd
+spec:
+  generators:
+    # Git File Generator: watches clusters/ directory for JSON files (M5 Task M5.1.1)
+    - git:
+        repoURL: https://github.com/your-org/platform-infra-fleet.git
+        revision: HEAD
+        files:
+          - path: clusters/**/*.json
+  template:
+    metadata:
+      name: 'bootstrap-{{cluster.name}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/platform-infra-fleet.git
+        targetRevision: HEAD
+        # Deploys core infrastructure baseline to the new cluster
+        path: stages/dev/
+      destination:
+        # Dynamically targets the newly onboarded cluster's API Server endpoint
+        server: '{{cluster.server}}'
+        namespace: kube-system
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

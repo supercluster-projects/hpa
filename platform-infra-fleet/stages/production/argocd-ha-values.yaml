@@ -1,0 +1,24 @@
+# High-Availability Values Override for Argo CD Fleet Bootstrap (M1 Task M1.3.1)
+controller:
+  replicas: 2
+  resources:
+    limits:
+      cpu: "1"
+      memory: 1024Mi
+    requests:
+      cpu: 500m
+      memory: 512Mi
+
+repoServer:
+  replicas: 2
+
+server:
+  replicas: 2
+  service:
+    type: ClusterIP
+
+redis:
+  exporter:
+    enabled: true
+  ha:
+    enabled: true

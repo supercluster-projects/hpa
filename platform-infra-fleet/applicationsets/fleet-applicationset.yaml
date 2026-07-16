@@ -1,0 +1,32 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: platform-fleet-workloads
+  namespace: argocd
+spec:
+  generators:
+    # Directory generator: matches directories under platform-infra-fleet/stages/
+    - git:
+        repoURL: https://github.com/your-org/platform-infra-fleet.git
+        revision: HEAD
+        directories:
+          - path: stages/*
+  template:
+    metadata:
+      name: 'platform-fleet-{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/your-org/platform-infra-fleet.git
+        targetRevision: HEAD
+        path: '{{path}}'
+      destination:
+        # Dynamically targets in-cluster or remote spoke cluster APIs
+        server: https://kubernetes.default.svc
+        namespace: 'hpa-workloads-{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

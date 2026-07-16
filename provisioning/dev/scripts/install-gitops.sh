@@ -48,6 +48,8 @@ HARBOR_URL="${DEV_HARBOR_URL}"
 HARBOR_PROJECT="${DEV_HARBOR_PROJECT}"
 GITOPS_REVISION="${DEV_GITOPS_REVISION}"
 HARBOR_HOST="${HARBOR_URL#*://}"
+CLUSTER_DEST_NAME="${CLUSTER_DEST_NAME:-in-cluster}"
+CLUSTER_DEST_URL="${CLUSTER_DEST_URL:-https://kubernetes.default.svc}"
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -124,24 +126,24 @@ ARGOCD_INSTALLED=false
 # ============================================================================
 log "Step 1: Installing Kargo (${KARGO_VERSION})"
 
-helm repo add kargo https://kargo.akuity.io/charts --force-update > /dev/null 2>&1 \
-  || die "Failed to add Kargo Helm repo"
-helm repo update > /dev/null 2>&1 \
-  || die "Failed to update Helm repos"
-log "  Kargo Helm repo: READY"
-
 kubectl create namespace "${KARGO_NAMESPACE}" --dry-run=client -o yaml \
   | kubectl apply -f - > /dev/null 2>&1 \
   || die "Failed to ensure namespace '${KARGO_NAMESPACE}'"
 log "  Namespace '${KARGO_NAMESPACE}': READY"
 
-helm upgrade --install kargo kargo/kargo \
+# Generate a random signing key for Kargo API tokens
+KARGO_SIGNING_KEY=$(openssl rand -base64 32)
+
+# Install Kargo from OCI registry directly (M2 fix for deprecated repo)
+helm upgrade --install kargo oci://ghcr.io/akuity/kargo-charts/kargo \
   --namespace "${KARGO_NAMESPACE}" \
   --version "${KARGO_VERSION}" \
   --atomic \
   --wait \
   --timeout "${WAIT_TIMEOUT}s" \
   --set service.type=ClusterIP \
+  --set api.adminAccount.passwordHash='$2y$10$nOUIs5kJ7naTuTFkBy1veuK0kSxUFXfuaOKdOKf9xU0zEnfgSydWy' \
+  --set api.adminAccount.tokenSigningKey="${KARGO_SIGNING_KEY}" \
   > /dev/null 2>&1 || log "  (non-fatal) Kargo Helm install will be re-attempted via --atomic"
 
 # Verify Kargo installed; if not, retry once
@@ -151,13 +153,15 @@ if kubectl -n "${KARGO_NAMESPACE}" get deployment kargo > /dev/null 2>&1 || \
   log "  Kargo: INSTALLED"
 else
   log "  Kargo not found after first attempt, retrying..."
-  helm upgrade --install kargo kargo/kargo \
+  helm upgrade --install kargo oci://ghcr.io/akuity/kargo-charts/kargo \
     --namespace "${KARGO_NAMESPACE}" \
     --version "${KARGO_VERSION}" \
     --atomic \
     --wait \
     --timeout "${WAIT_TIMEOUT}s" \
     --set service.type=ClusterIP \
+    --set api.adminAccount.passwordHash='$2y$10$nOUIs5kJ7naTuTFkBy1veuK0kSxUFXfuaOKdOKf9xU0zEnfgSydWy' \
+    --set api.adminAccount.tokenSigningKey="${KARGO_SIGNING_KEY}" \
     > /dev/null 2>&1 || die "Kargo Helm install failed after retry"
   KARGO_INSTALLED=true
   log "  Kargo: INSTALLED"

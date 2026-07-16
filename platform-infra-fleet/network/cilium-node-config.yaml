@@ -1,0 +1,12 @@
+# CiliumNodeConfig for Explicit Interface Binding (M4 Task M4.2.2)
+apiVersion: cilium.io/v2
+kind: CiliumNodeConfig
+metadata:
+  name: hpa-dev-node-config
+  namespace: kube-system
+spec:
+  # Empty nodeSelector matches all nodes in the spoke cluster (M4 Task M4.2.2)
+  nodeSelector: {}
+  defaults:
+    # Explicitly locks down BPF datapath routing to the primary VM device
+    devices: "eth0"
