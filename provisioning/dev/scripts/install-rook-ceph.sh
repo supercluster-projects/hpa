@@ -97,9 +97,11 @@ build_worker_names() {
   local prefix="$1"
   local count="$2"
   local i
+  local names=()
   for i in $(seq 0 $((count - 1))); do
-    echo "${prefix}-worker-${i}"
+    names+=("${prefix}-worker-${i}")
   done
+  echo "${names[*]}"
 }
 read -r -a WORKER_NAMES <<< "$(build_worker_names "${NODE_PREFIX}" "${WORKER_COUNT}")"
 log "  worker targets: ${WORKER_NAMES[*]}"
