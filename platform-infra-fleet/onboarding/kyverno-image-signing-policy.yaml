@@ -1,0 +1,32 @@
+# Kyverno ClusterPolicy for Cosign Image Signature Validation (M5 Task M5.2.2)
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: enforce-cosign-signature
+  annotations:
+    policies.kyverno.io/title: Enforce Cosign Image Signatures
+    policies.kyverno.io/description: >-
+      Prunes and blocks non-compliant pod creation by validating Cosign signatures
+      on container images matching the local secure Harbor registry path.
+spec:
+  validationFailureAction: Enforce
+  background: false
+  rules:
+    - name: verify-harbor-cosign-signature
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+      verifyImages:
+        - imageReferences:
+            # Targets all image builds pulled from the secure Harbor project
+            - "harbor.harbor.svc.cluster.local/library/*"
+          attestations: []
+          # Defines the corporate Cosign public key used to validate OCI signatures (M5 Task M5.2.2)
+          authority:
+            key: |
+              -----BEGIN PUBLIC KEY-----
+              MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE7p9DkOUIs5kJ7naTuTFkBy1veuK0
+              kSxUFXfuaOKdOKf9xU0zEnfgSydWy88aOpcT7K2gV34m8Kqyhu0mfydby8xliQ==
+              -----END PUBLIC KEY-----

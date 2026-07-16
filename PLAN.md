@@ -152,9 +152,9 @@ To prove that Milestone 4 secure parity and closed-loop rollback are fully opera
     *   [x] **Task M5.1.2:** Implement an onboarding script that registers a newly provisioned LibVirt/QEMU cluster endpoint into the Hub's secrets, initiating immediate platform bootstrapping.
     *   [x] **Task M5.1.3:** Verify that new Spoke clusters dynamically receive CNI, Storage classes, and Observability agents within minutes of onboarding.
 *   **Slice 5.2: End-to-End Delivery Simulation & Auditing**
-    *   [ ] **Task M5.2.1:** Execute a complete developer simulation: scaffold an application, push commits, promote through staging, and verify deployment onto production spoke clusters.
-    *   [ ] **Task M5.2.2:** Verify that Harbor OCI image scanning, container signing via Cosign, and signature validation policies (Kyverno/OPA) reject unsigned images.
-    *   [ ] **Task M5.2.3:** Measure platform latency (scaffold-to-production time) and compile a performance audit report to fine-tune the VictoriaMetrics scraping interval.
+    *   [x] **Task M5.2.1:** Execute a complete developer simulation: scaffold an application, push commits, promote through staging, and verify deployment onto production spoke clusters.
+    *   [x] **Task M5.2.2:** Verify that Harbor OCI image scanning, container signing via Cosign, and signature validation policies (Kyverno/OPA) reject unsigned images.
+    *   [x] **Task M5.2.3:** Measure platform latency (scaffold-to-production time) and compile a performance audit report to fine-tune the VictoriaMetrics scraping interval.
 
 ### 🧪 Verification & Concrete Testing (M5)
 To prove that Milestone 5 scale, automated onboarding, and compliance gates are fully operational:
