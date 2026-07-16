@@ -92,6 +92,14 @@ else
   done <<< "${VOL_NAMES}"
 fi
 
+# Cleanly wipe/recreate host-side raw Ceph disk files to prevent metadata inheritance (M5 PSS/OSD fix)
+echo "[$(date +%H:%M:%S)] Cleaving host-side raw Ceph disk images..." >&2
+if sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
+  echo "[$(date +%H:%M:%S)]   Wiped and cleared: /var/lib/libvirt/images/ceph-disks/*.img" >&2
+else
+  cleanup_fail "sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
+fi
+
 # ---- Step 3: Destroy and undefine the hpa-bridge network ------------------
 if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
   echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' exists. Destroying..." >&2
