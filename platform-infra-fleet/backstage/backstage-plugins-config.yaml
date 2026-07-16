@@ -1,0 +1,36 @@
+# Backstage GitOps Plugins Integration Configuration (M3 Task M3.3.1, M3.3.2 & M3.3.3)
+# Append these configurations to your central Backstage app-config.production.yaml
+
+# ---- ArgoCD Plugin Configuration (Task M3.3.1 & M3.3.2) -----------------
+argocd:
+  # The central Hub Argo CD API Endpoint
+  baseUrl: http://argocd-server.argocd.svc.cluster.local
+  # Connection credential token used by Backstage to query sync statuses
+  token: ${ARGOCD_AUTH_TOKEN}
+  # Wait and poll options
+  waitAndPoll:
+    interval: 10s
+    timeout: 3m
+
+# ---- Argo Rollouts Plugin Configuration (Task M3.3.3) --------------------
+argoRollouts:
+  # Connects Backstage directly to the Argo Rollouts Dashboard service
+  baseUrl: http://argo-rollouts-dashboard.argo-rollouts.svc.cluster.local
+  # Exposes metrics analysis endpoints to render live canary trends
+  metrics:
+    prometheusUrl: http://vmsingle-observability.observability.svc.cluster.local:8428
+
+# ---- Software Catalog Plugin Binding Examples ---------------------------
+# Component Catalog Manifest showing annotation mapping inside application codebases
+#
+# apiVersion: backstage.io/v1alpha1
+# kind: Component
+# metadata:
+#   name: target-app
+#   annotations:
+#     # ArgoCD app registration name
+#     argocd/app-name: platform-fleet-target-app
+#     # Argo Rollout target resource mapping
+#     argo-rollouts/rollout-name: target-app-rollout
+#     # namespace mapping
+#     argo-rollouts/namespace: hpa-workloads-target-app
