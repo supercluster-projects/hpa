@@ -146,14 +146,14 @@ metadata:
   name: hpa-dev-l2-policy
 spec:
   interfaces:
-    - eth0
+    - enp1s0
   externalIPs: true
   loadBalancerIPs: true
 EOF
 log "  CiliumL2AnnouncementPolicy 'hpa-dev-l2-policy': APPLIED"
 
 # ---- Step 5b: Apply CiliumNodeConfig 'hpa-dev-node-config' -----------------
-log "Step 5b: Applying CiliumNodeConfig 'hpa-dev-node-config' to bind eth0"
+log "Step 5b: Applying CiliumNodeConfig 'hpa-dev-node-config' to bind enp1s0"
 cat <<EOF | kubectl apply -f - > /dev/null 2>&1 \
   || die "Failed to apply CiliumNodeConfig"
 apiVersion: cilium.io/v2
@@ -164,7 +164,7 @@ metadata:
 spec:
   nodeSelector: {}
   defaults:
-    devices: "eth0"
+    devices: "enp1s0"
 EOF
 log "  CiliumNodeConfig 'hpa-dev-node-config': APPLIED"
 

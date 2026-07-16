@@ -9,4 +9,4 @@ spec:
   nodeSelector: {}
   defaults:
     # Explicitly locks down BPF datapath routing to the primary VM device
-    devices: "eth0"
+    devices: "enp1s0"

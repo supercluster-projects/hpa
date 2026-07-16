@@ -15,8 +15,8 @@ metadata:
   name: hpa-dev-l2-policy
   namespace: kube-system
 spec:
-  # Directs L2 announcements to be sent exclusively via primary node eth0 (M4 Task M4.2.3)
+  # Directs L2 announcements to be sent exclusively via primary node enp1s0 (M4 Task M4.2.3)
   interfaces:
-    - eth0
+    - enp1s0
   externalIPs: true
   loadBalancerIPs: true
