@@ -23,6 +23,12 @@ Ensure your host machine has the following packages pre-installed:
     cp .env.example .env
     ```
 2.  Fill in the private keys and endpoints. The environment configurations are automatically loaded by the bootstrapping scripts.
+3.  **Local GitOps Configuration (`GITOPS_REPO_URL`):**
+    For local-only offline operations, configure the `GITOPS_REPO_URL` variable inside your `.env` file to point to the local Git Daemon broadcast address:
+    ```env
+    GITOPS_REPO_URL=git://192.168.122.1/with-gsd
+    ```
+    This redirects the platform bootstrapping pipeline to sync manifests from your host machine's filesystem, avoiding external dependency loops or internet connection requirements.
 
 ---
 
