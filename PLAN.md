@@ -20,9 +20,9 @@ The roadmap is structured into **5 sequential Milestones**, each divided into hi
     *   [x] **Task M1.2.2:** Define the directory structure for environment overlays (e.g., `stages/dev/`, `stages/staging/`, `stages/production/`).
     *   [x] **Task M1.2.3:** Create a template repository format for application source repositories (to be used later by Backstage Scaffolder).
 *   **Slice 1.3: Argo CD Bootstrap on Hub**
-    *   [ ] **Task M1.3.1:** Deploy Argo CD on the Hub cluster in High-Availability (HA) mode under the `argocd` namespace.
-    *   [ ] **Task M1.3.2:** Enable the `ApplicationSet` controller and configure cluster-generator selectors.
-    *   [ ] **Task M1.3.3:** Connect Argo CD on the Hub cluster to the staging/production spoke clusters via secure Kubernetes service account tokens.
+    *   [x] **Task M1.3.1:** Deploy Argo CD on the Hub cluster in High-Availability (HA) mode under the `argocd` namespace.
+    *   [x] **Task M1.3.2:** Enable the `ApplicationSet` controller and configure cluster-generator selectors.
+    *   [x] **Task M1.3.3:** Connect Argo CD on the Hub cluster to the staging/production spoke clusters via secure Kubernetes service account tokens.
 
 ### 🧪 Verification & Concrete Testing (M1)
 To prove that Milestone 1 foundations are fully operational:
