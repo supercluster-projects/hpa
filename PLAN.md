@@ -12,9 +12,9 @@ The roadmap is structured into **5 sequential Milestones**, each divided into hi
 
 ### Slices & Tasks
 *   **Slice 1.1: Management Hub Cluster Provisioning**
-    *   [ ] **Task M1.1.1:** Provision a dedicated Management Hub Cluster (can be a local lightweight VM/cluster or managed cloud node).
-    *   [ ] **Task M1.1.2:** Configure host networking and verify external routing (e.g., DNS access to Harbor and Git repositories).
-    *   [ ] **Task M1.1.3:** Setup admin access credentials, storage classes, and configure RBAC roles for platform engineers.
+    *   [x] **Task M1.1.1:** Provision a dedicated Management Hub Cluster (can be a local lightweight VM/cluster or managed cloud node).
+    *   [x] **Task M1.1.2:** Configure host networking and verify external routing (e.g., DNS access to Harbor and Git repositories).
+    *   [x] **Task M1.1.3:** Setup admin access credentials, storage classes, and configure RBAC roles for platform engineers.
 *   **Slice 1.2: GitOps Repository & Organizational Layout**
     *   [ ] **Task M1.2.1:** Create the central platform repository: `platform-infra-fleet` (for hosting Kubernetes cluster blueprints, Argo CD ApplicationSets, and core helm charts).
     *   [ ] **Task M1.2.2:** Define the directory structure for environment overlays (e.g., `stages/dev/`, `stages/staging/`, `stages/production/`).
