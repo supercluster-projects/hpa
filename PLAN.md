@@ -117,9 +117,9 @@ To prove that Milestone 3 developer integration is fully operational:
     *   [x] **Task M4.1.2:** Configure secure `SecretStore` resources on Spoke clusters referencing the central Infisical Vault on the Hub cluster.
     *   [x] **Task M4.1.3:** Map application helm charts to dynamically request and mount Infisical database and runtime credentials as native Kubernetes Secrets.
 *   **Slice 4.2: eBPF Networking Parity (Cilium)**
-    *   [ ] **Task M4.2.1:** Standardize the Cilium Helm values across Spoke clusters using `kubeProxyReplacement=true`.
-    *   [ ] **Task M4.2.2:** Implement a unified `CiliumNodeConfig` to explicitly target Spoke VM interfaces (`eth0` on local LibVirt, appropriate provider interfaces in prod).
-    *   [ ] **Task M4.2.3:** Map L2 Announcement policies on spokes to coordinate IP pools with local subnet gateway configurations.
+    *   [x] **Task M4.2.1:** Standardize the Cilium Helm values across Spoke clusters using `kubeProxyReplacement=true`.
+    *   [x] **Task M4.2.2:** Implement a unified `CiliumNodeConfig` to explicitly target Spoke VM interfaces (`eth0` on local LibVirt, appropriate provider interfaces in prod).
+    *   [x] **Task M4.2.3:** Map L2 Announcement policies on spokes to coordinate IP pools with local subnet gateway configurations.
 *   **Slice 4.3: Metric-Driven Automated Canaries**
     *   [ ] **Task M4.3.1:** Deploy central VictoriaMetrics TSDB on the Hub cluster.
     *   [ ] **Task M4.3.2:** Install the lightweight `vmagent` scraper on Spoke clusters to scrape local metrics and securely stream them to VictoriaMetrics.
