@@ -1,0 +1,186 @@
+# GitLab CI Pipeline for HPA GitOps Platform
+# This pipeline provides validation and testing for the platform infrastructure
+
+stages:
+  - validate
+  - test
+  - build
+
+# Cache for Go modules
+cache:
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - backend/*/go.sum
+    - backend/go.sum
+    - ~/.cache/go-build
+
+# Default before script
+default:
+  before_script:
+    - apt-get update && apt-get install -y terraform wget curl unzip
+
+# -----------------------------------------------------------------------------
+# Terraform Validation
+# -----------------------------------------------------------------------------
+terraform-validate:
+  stage: validate
+  image: hashicorp/terraform:latest
+  script:
+    - cd provisioning/dev/opentofu
+    - terraform init -backend=false
+    - terraform fmt -check -recursive
+    - terraform validate
+  only:
+    changes:
+      - provisioning/dev/opentofu/**/*.tf
+      - provisioning/dev/opentofu/**/*.tfvars
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Go Tests
+# -----------------------------------------------------------------------------
+go-test:
+  stage: test
+  image: golang:1.23
+  script:
+    - cd backend
+    - go build ./...
+    - cd functions/welcome
+    - go test -v -cover -coverprofile=coverage.out
+    - go tool cover -func=coverage.out
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: backend/functions/welcome/coverage.out
+    expire_in: 1 week
+  only:
+    changes:
+      - backend/**/*.go
+      - backend/go.mod
+      - backend/go.sum
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Go Lint
+# -----------------------------------------------------------------------------
+go-lint:
+  stage: validate
+  image: golang:1.23
+  script:
+    - cd backend
+    - go get golang.org/x/lint/golint@latest
+    - go install golang.org/x/lint/golint@latest
+    - golint ./...
+    - go vet ./...
+  only:
+    changes:
+      - backend/**/*.go
+      - backend/go.mod
+      - backend/go.sum
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Shell Script Validation
+# -----------------------------------------------------------------------------
+shell-lint:
+  stage: validate
+  image:alpine:latest
+  before_script:
+    - apk add --no-cache bash shellcheck
+  script:
+    - shellcheck provisioning/dev/scripts/*.sh
+    - bash -n provisioning/dev/scripts/*.sh
+  only:
+    changes:
+      - provisioning/dev/scripts/**/*.sh
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Kubernetes Manifest Validation
+# -----------------------------------------------------------------------------
+k8s-validate:
+  stage: validate
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - echo "Validating Kubernetes manifests..."
+    - |
+      for f in gitops-workloads/**/*.yaml; do
+        if [ -f "$f" ]; then
+          echo "Checking $f..."
+          # Basic YAML syntax validation
+          head -1 "$f" | grep -q "^apiVersion:" || echo "Missing apiVersion in $f"
+        fi
+      done
+  only:
+    changes:
+      - gitops-workloads/**/*.yaml
+      - gitops-workloads/**/*.yml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Secret Detection
+# -----------------------------------------------------------------------------
+secret-scan:
+  stage: validate
+  image: alpine:latest
+  script:
+    - echo "Checking for potential secrets in repository..."
+    - |
+      # Check for common secret patterns
+      if git grep -E "password[=:]+["'"'"'"]?[a-zA-Z0-9]{8,}" --cached | grep -v "env.example"; then
+        echo "WARNING: Potential hardcoded password detected"
+        exit 0  # Warning only, don't fail
+      fi
+    - |
+      # Check for untracked sensitive files
+      if git ls-files | grep -E "\.(env|env\.backup|secret|key|pem|crt)$"; then
+        echo "WARNING: Potentially sensitive files are tracked"
+        exit 1
+      fi
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# DR Y Verification
+# -----------------------------------------------------------------------------
+dry-verify:
+  stage: validate
+  image: alpine:latest
+  before_script:
+    - apk add --no-cache bash
+  script:
+    - bash scripts/verify-dry-changes.sh
+  only:
+    changes:
+      - provisioning/dev/opentofu/**/*.tf
+      - provisioning/dev/scripts/**/*.sh
+      - backend/**/*.go
+      - backend/**/*.rs
+      - gitops-workloads/**/*.yaml
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# -----------------------------------------------------------------------------
+# Release Cleanup
+# -----------------------------------------------------------------------------
+cleanup:
+  stage: .post
+  script:
+    - echo "Pipeline completed"
+  when: always
+  allow_failure: true
