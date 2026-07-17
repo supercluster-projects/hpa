@@ -4,12 +4,16 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/hpa/backend/internal/config"
 )
 
 const (
@@ -20,39 +24,72 @@ const (
 )
 
 func main() {
-	counterAddr := os.Getenv("COUNTER_ADDR")
-	if counterAddr == "" {
-		counterAddr = defaultCounterAddr
-	}
+	// Use config package for defaults
+	addr := config.GetEnvOrDefault(config.EnvVarPort, config.PortWelcomeService)
+	counterAddr := config.GetEnvOrDefault("COUNTER_ADDR", defaultCounterAddr)
 
 	mux := http.NewServeMux()
+
+	// Health check endpoint
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(config.HeaderContentType, config.ContentTypePlainText)
+		w.WriteHeader(config.StatusOK)
+		fmt.Fprint(w, "OK")
+	})
+
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
-			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			http.Error(w, "method not allowed", config.StatusMethodNotAllowed)
 			return
 		}
 
 		count, err := fetchCounter(r.Context(), counterAddr)
 		if err != nil {
-			log.Printf("ERROR: counter fetch failed: %v", err)
-			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-			http.Error(w, fmt.Sprintf("counter error: %v", err), http.StatusBadGateway)
+			slog.Error("counter fetch failed", "error", err, "counter_addr", counterAddr)
+			w.Header().Set(config.HeaderContentType, config.ContentTypePlainText)
+			http.Error(w, fmt.Sprintf("counter error: %v", err), config.StatusBadGateway)
 			return
 		}
 
 		response := fmt.Sprintf("Welcome (%d)", count)
-		log.Printf("INFO: returning welcome response: %q", response)
+		slog.Info("returning welcome response", "response", response, "counter_addr", counterAddr)
 
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		w.WriteHeader(http.StatusOK)
+		w.Header().Set(config.HeaderContentType, config.ContentTypePlainText)
+		w.WriteHeader(config.StatusOK)
 		fmt.Fprint(w, response)
 	})
 
-	addr := ":8080"
-	log.Printf("INFO: welcome function starting on %s, counter addr: %s", addr, counterAddr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("FATAL: server failed: %v", err)
+	srv := &http.Server{
+		Addr:              ":" + addr,
+		Handler:           mux,
+		ReadTimeout:       15 * time.Second,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	// Setup graceful shutdown
+	done := make(chan os.Signal, 1)
+	signal.Notify(done, os.Interrupt, syscall.SIGTERM)
+
+	go func() {
+		slog.Info("welcome function starting", "addr", ":"+addr, "counter_addr", counterAddr)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			slog.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	<-done
+	slog.Info("shutting down gracefully")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		slog.Error("server shutdown failed", "error", err)
+		os.Exit(1)
+	}
+
+	slog.Info("server stopped")
 }
 
 // fetchCounter calls the counter service and parses the response body as an integer.

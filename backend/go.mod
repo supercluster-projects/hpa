@@ -1,9 +1,8 @@
-module github.com/hpa/backend/functions/welcome
+module github.com/hpa/backend
 
 go 1.23
 
 require (
-	github.com/hpa/backend v0.0.0
 	github.com/stretchr/testify v1.10.0
 )
 
@@ -12,5 +11,3 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/hpa/backend => ../..

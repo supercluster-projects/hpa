@@ -27,8 +27,13 @@ lpt[1-9].*
 .vscode/
 *.code-workspace
 .env
-.env.*
 !.env.example
+.env.backup
+
+# Terraform state files
+*.tfstate
+*.tfstate.backup
+.terraform/
 node_modules/
 .next/
 dist/

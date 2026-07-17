@@ -2,7 +2,14 @@ apiVersion: serving.knative.dev/v1
 kind: Service
 metadata:
   name: welcome
-  namespace: hpa-workloads
+  labels:
+    app.kubernetes.io/name: welcome
+    app.kubernetes.io/instance: welcome-service
+    app.kubernetes.io/component: function
+    app.kubernetes.io/part-of: hpa-platform
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    serving.knative.dev/creator: hpa-platform
 spec:
   template:
     metadata:
@@ -11,7 +18,7 @@ spec:
         autoscaling.knative.dev/max-scale: "10"
     spec:
       containers:
-        - image: harbor.harbor.svc.cluster.local/library/hpa-workloads/welcome:latest
+        - image: ${HARBOR_SERVICE}/library/hpa-workloads/welcome:latest
           ports:
             - containerPort: 8080
           env:
@@ -21,3 +28,5 @@ spec:
             - secretRef:
                 name: welcome-infisical-secrets
                 optional: true
+      # Resource requests and limits for Knative
+      # Note: Knative uses container-level resources, not pod-level

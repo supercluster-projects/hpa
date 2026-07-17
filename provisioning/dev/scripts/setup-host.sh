@@ -178,7 +178,7 @@ if [ -f "${SCRIPT_DIR}/setup-bridge.sh" ]; then
 else
   log "  setup-bridge.sh not found at ${SCRIPT_DIR}/setup-bridge.sh"
   log "  Creating hpa-bridge manually..."
-  # Fallback: create a basic NAT network
+  # Fallback: create a basic NAT network using environment variables
   cat > /tmp/hpa-bridge-net.xml <<XMLEOF
 <network>
   <name>${BRIDGE_NAME}</name>
@@ -188,9 +188,9 @@ else
     </nat>
   </forward>
   <bridge name='${BRIDGE_NAME}' stp='on' delay='0'/>
-  <ip address='192.168.122.1' netmask='255.255.255.0'>
+  <ip address='${GATEWAY_IP}' netmask='255.255.255.0'>
     <dhc>
-      <range start='192.168.122.10' end='192.168.122.200'/>
+      <range start='${CIDR_BASE}.10' end='${CIDR_BASE}.200'/>
     </dhc>
   </ip>
 </network>

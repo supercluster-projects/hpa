@@ -1,0 +1,9 @@
+tools:
+    shell:
+        allow:
+            - find *
+            - head *
+            - ls *
+            - cd *
+            - git status
+            - grep *

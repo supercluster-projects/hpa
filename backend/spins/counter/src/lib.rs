@@ -2,12 +2,9 @@ use spin_sdk::http::{IntoResponse, Request, Response};
 use spin_sdk::http_service;
 use spin_sdk::redis::Connection;
 
-/// The default KeyDB address within the cluster.
-/// Overridden by the KEYDB_URL environment variable.
-const DEFAULT_KEYDB_URL: &str = "redis://keydb.keydb.svc.cluster.local:6379/";
+mod constants;
 
-/// Counter key name stored in KeyDB.
-const COUNTER_KEY: &str = "counter-welcome";
+use constants::{COUNTER_KEY, DEFAULT_KEYDB_URL, DEFAULT_PORT};
 
 /// Spin HTTP component that increments a KeyDB counter and returns the new value.
 ///

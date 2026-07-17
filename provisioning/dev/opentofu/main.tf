@@ -34,7 +34,12 @@ data "talos_machine_configuration" "controlplane" {
   machine_secrets  = talos_machine_secrets.this.machine_secrets
 
   config_patches = [
-    file("${path.module}/cluster-config.yaml"),
+    templatefile("${path.module}/cluster-config.yaml.tftpl", {
+      gateway           = local.gateway
+      cidr_block        = local.cidr_block
+      cp_node_names     = join(",", local.cp_node_names)
+      worker_node_names = join(",", local.worker_node_names)
+    }),
   ]
 }
 
@@ -44,8 +49,13 @@ data "talos_machine_configuration" "worker" {
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
 
-  config_patches = [
-    file("${path.module}/cluster-config.yaml"),
+  config_patches = concat([
+    templatefile("${path.module}/cluster-config.yaml.tftpl", {
+      gateway           = local.gateway
+      cidr_block        = local.cidr_block
+      cp_node_names     = join(",", local.cp_node_names)
+      worker_node_names = join(",", local.worker_node_names)
+    }),
     yamlencode({
       machine = {
         disks = [
@@ -55,7 +65,7 @@ data "talos_machine_configuration" "worker" {
         ]
       }
     })
-  ]
+  ])
 }
 
 # ---------------------------------------------------------------------------

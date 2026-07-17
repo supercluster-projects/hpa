@@ -4,18 +4,23 @@
 # These patches customize disk layout for the libvirt/bridge-based
 # dev environment on hpa-bridge. Per-node networking (hostname, IP,
 # bonding) is applied at the talos_machine_configuration_apply step.
+#
+# NOTE: IP addresses and network values are injected via Terraform's
+# config_patches interpolation in main.tf using the network-variables.tf locals.
+# This ensures DRY compliance with a single source of truth.
 ---
 machine:
   sysctls:
     net.ipv4.conf.all.rp_filter: "0"
     net.ipv4.conf.default.rp_filter: "0"
   env:
-    http_proxy: http://192.168.122.1:10809
-    https_proxy: http://192.168.122.1:10809
-    no_proxy: 127.0.0.1,localhost,192.168.122.0/24,.cluster.local,hpa-node-cp-0,hpa-node-worker-0,hpa-node-worker-1,hpa-node-worker-2
+    # Proxy settings - values interpolated from Terraform locals
+    http_proxy: "http://${gateway}:10809"
+    https_proxy: "http://${gateway}:10809"
+    no_proxy: "127.0.0.1,localhost,${cidr_block},.cluster.local,${cp_node_names},${worker_node_names}"
   time:
     servers:
-      - 192.168.122.1
+      - "${gateway}"
 
   # Spegel mirror configuration — enable for distributed image mirroring
   # This patch disables discard_unpacked_layers which is enabled by default
@@ -28,7 +33,8 @@ machine:
   kubelet:
     nodeIP:
       validSubnets:
-        - 192.168.122.0/24
+        # CIDR block interpolated from Terraform locals
+        - "${cidr_block}"
 
   files:
     - path: /etc/cri/conf.d/20-customization.part

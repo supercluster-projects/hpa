@@ -2,10 +2,24 @@ apiVersion: core.spinoperator.dev/v1alpha1
 kind: SpinApp
 metadata:
   name: counter
-  namespace: hpa-workloads
+  labels:
+    app.kubernetes.io/name: counter
+    app.kubernetes.io/instance: counter-service
+    app.kubernetes.io/component: spin-function
+    app.kubernetes.io/part-of: hpa-platform
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    spin-kube.sh/creator: hpa-platform
 spec:
-  image: harbor.harbor.svc.cluster.local/library/hpa-workloads/counter:latest
+  image: ${HARBOR_SERVICE}/library/hpa-workloads/counter:latest
   replicas: 1
   executor: default
   environment:
-    KEYDB_URL: "redis://keydb.keydb.svc.cluster.local:6379/"
+    KEYDB_URL: ${KEYDB_URL:-"redis://keydb.keydb.svc.cluster.local:6379/"}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi

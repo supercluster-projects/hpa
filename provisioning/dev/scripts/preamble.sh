@@ -192,11 +192,25 @@ require_env() {
 }
 
 ENV_FILE="${PROJECT_ROOT}/.env"
+
+# ---- Common Environment Defaults (avoid DRY violations) ----
+# These provide sensible defaults that can be overridden by .env
+
+# Network Configuration
+CIDR_BASE="${CIDR_BASE:-192.168.122}"
+CIDR_BLOCK="${CIDR_BLOCK:-${CIDR_BASE}.0/24}"
+GATEWAY_IP="${GATEWAY_IP:-${CIDR_BASE}.1}"
+CONTROL_PLANE_IP="${CONTROL_PLANE_IP:-${CIDR_BASE}.100}"
+
+# Kubeconfig path
+KUBECONFIG="${KUBECONFIG:-${PROJECT_ROOT}/provisioning/dev/opentofu/kubeconfig}"
+
+# Source .env if it exists (overrides defaults above)
 if [ -f "${ENV_FILE}" ]; then
   set -a; source "${ENV_FILE}"; set +a
 fi
 
 command -v kubectl >/dev/null 2>&1 || log "  Warning: kubectl not found in PATH"
-command -v helm >/dev/null 2>&1    || log "  Warning: helm not found in PATH"
+command -v helm >/dev/null 2>&1 || log "  Warning: helm not found in PATH"
 
-export KUBECONFIG PROJECT_ROOT
+export KUBECONFIG PROJECT_ROOT CIDR_BASE CIDR_BLOCK GATEWAY_IP CONTROL_PLANE_IP
