@@ -12,7 +12,8 @@ A comprehensive DevOps platform implementing **Progressive Delivery with Backsta
 2. [Quickstart Guide](#quickstart-guide)
 3. [Implementation Plan](#implementation-plan)
 4. [Improvements & Best Practices](#improvements--best-practices)
-5. [Contributing](#contributing)
+5. [Architecture](#architecture)
+6. [Contributing](#contributing)
 
 ---
 
@@ -397,7 +398,54 @@ backend/
 
 ---
 
+## 🏗️ Architecture: Hub-and-Spoke Fleet Management
+
+The platform implements a **Hub-and-Spoke topology** with the Management Plane (Hub) orchestrating Workload Planes across environments.
+
+### High-Level Architecture
+
+```
+       ┌────────────────────────────────────────────────────────┐
+       │                 DEVELOPER WORKSTATION                  │
+       │  (Backstage Developer Portal / Local LibVirt Cluster)  │
+       └─────────────────────────┬──────────────────────────────┘
+                                 │
+                                 ▼
+       ┌────────────────────────────────────────────────────────┐
+       │             MANAGEMENT PLANE (HUB CLUSTER)             │
+       │    [Kargo Control Plane]  [Argo CD Fleet Orchestrator] │
+       └───────────┬─────────────────────────────┬──────────────┘
+                   │                             │
+                   ▼ (Spoke Sync)                ▼ (Spoke Sync)
+┌──────────────────────────────────────┐  ┌──────────────────────────────────────┐
+│       STAGING SPOKE CLUSTER          │  │     PRODUCTION FLEET SPOKES          │
+│ [Argo Agent] [Cilium] [Rook Ceph]    │  │ [Argo Agent] [Cilium] [Rook Ceph]    │
+└──────────────────────────────────────┘  └──────────────────────────────────────┘
+```
+
+### Local Dev Cluster vs Production Spokes
+
+| Stage | Dev Hypervisor (LibVirt/QEMU) | Production Spokes (AWS/On-Prem) |
+|-------|------------------------------|--------------------------------|
+| **Control Plane** | Local workstation CLI / `startup.sh` | Central Backstage Hub Cluster |
+| **CNI** | Cilium (kube-proxy-free, eth0 config) | Cilium (kube-proxy-free, eth0/elastic interface) |
+| **Storage** | Rook Ceph (attached sparse virtual disks) | Rook Ceph (attached EBS/Physical NVMe disks) |
+| **Secrets** | Local Infisical Operator | Enterprise Vault / Infisical Multi-Region |
+| **GitOps** | Argo CD (Adoption / local cluster) | Argo CD + Kargo (Multi-cluster fleet) |
+
+### Developer Workflow
+
+1. **Golden Path Bootstrapping** → Developer selects template in Backstage → Repository auto-created with GitOps wiring
+2. **Code Development** → Local LibVirt Talos cluster for high-fidelity testing
+3. **CI Pipeline** → Build → Harbor secure scanning → Image signing
+4. **Progressive Delivery** → Click "Promote" in Backstage → Kargo promotion → Argo CD sync waves
+5. **Observability** → VictoriaMetrics + Backstage dashboard → Canary analysis → Auto rollback
+
+---
+
 ## 🎨 Architecture Overview
+
+### Component Architecture
 
 ```
                     ┌─────────────────────────────────────┐
@@ -429,27 +477,57 @@ backend/
 
 ---
 
+## 🛠️ Platform Components
+
+### Developer Portal & Delivery Orchestration
+
+1. **Backstage (Internal Developer Portal)** - Central UI and DevEx layer with Software Catalog, Golden Path Templates, and native monitoring dashboards
+2. **Kargo (Progressive Delivery Engine)** - Kubernetes-native promotion coordinator modeling pipelines as declarative stages (dev → staging → prod)
+3. **Argo CD (GitOps Engine)** - Continuous reconciliation loop observing Git and auto-healing cluster state
+
+### Core Platform Services
+
+4. **Cilium CNI** - eBPF-powered networking, routing, and security with `kubeProxyReplacement=true` mode
+   - L2 Announcements with `192.168.122.208/28` LB pool
+   - `CiliumNodeConfig` for predictable eBPF datapath binding
+5. **Rook Ceph** - Dynamic persistent block/file storage via CSI (`ceph-rbd`) for stateful apps
+6. **Harbor** - Local secure OCI registry with vulnerability scanning and Cosign signing
+7. **Infisical** - Central secret management with Kubernetes Operator injection
+8. **Spegel** - P2P registry mirror for caching container images locally
+9. **VictoriaMetrics** - High-performance TSDB for metrics collected by `vmagent`, powering canary analysis
+
+### Infrastructure
+
+- **OpenTofu** - QEMU/KVM VM provisioning with declarative infrastructure code
+- **Talos Linux** - Kubernetes-native OS with `kube-proxy-free` configuration via Cilium CNI
+- **KeyDB** - Redis-compatible in-memory database for counter state
+
+---
+
 ## 📖 Key Features
 
 ### 1. GitOps with Argo CD
 - Automated sync from Git repositories to clusters
 - Multi-cluster fleet management via ApplicationSets
-- Drift detection and auto-reconciliation
+- Drift detection and auto-reconciliation with sync waves
 
 ### 2. Progressive Delivery with Kargo
-- Warehouse pattern for artifact detection
+- Warehouse pattern for artifact detection from Harbor
 - Multi-stage promotion (dev → staging → production)
-- Automated canary analysis with VictoriaMetrics
+- Metric-analyzed canary rollouts with VictoriaMetrics
+- Automatic git-backed rollback on anomaly detection
 
 ### 3. Developer Self-Service with Backstage
-- Scaffolding templates for Go microservices
-- Integrated Argo CD plugin for deployment status
-- Policy-as-code with OPA/Kyverno
+- Golden Path templates for Go microservices
+- Integrated Argo CD plugin for deployment status in catalog
+- Policy-as-code with OPA/Kyverno enforcement
+- Argo Rollouts tab for canary visualization
 
 ### 4. Infrastructure Automation
 - OpenTofu for libvirt/QEMU VM provisioning
 - Talos Linux for Kubernetes-native infrastructure
 - Cilium CNI with ClusterMesh for multi-cluster networking
+- Rook Ceph for dynamic persistent storage
 
 ---
 
