@@ -1,8 +1,18 @@
 
 
+# Architecture Diagram
+
+**Note:** The comprehensive architecture overview, including the Hub-and-Spoke topology, component descriptions, and developer workflow, has been consolidated into the main [README.md](../../README.md).
+
+This file provides a detailed ASCII architecture diagram for reference. For a guided walkthrough, see the README's Architecture section.
+
+---
+
 `========================================================================================================`  
                           `UNIFIED DATA LAYER - COMPONENT & TRAFFIC ARCHITECTURE`  
 `========================================================================================================`
+
+This diagram shows the complete platform architecture from developer workstation through local LibVirt cluster to production fleet, with the unified data layer and storage engines.
 
                                     `+-----------------------+`
 
