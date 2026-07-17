@@ -4,7 +4,11 @@ metadata:
   name: casbin-ext-authz
   namespace: casbin
   labels:
-    app: casbin-ext-authz
+    app.kubernetes.io/name: casbin-ext-authz
+    app.kubernetes.io/instance: casbin-service
+    app.kubernetes.io/component: authorizer
+    app.kubernetes.io/part-of: hpa-platform
+    app.kubernetes.io/managed-by: argocd
 spec:
   replicas: 1
   selector:
@@ -14,6 +18,10 @@ spec:
     metadata:
       labels:
         app: casbin-ext-authz
+        app.kubernetes.io/name: casbin-ext-authz
+        app.kubernetes.io/instance: casbin-service
+        app.kubernetes.io/component: authorizer
+        app.kubernetes.io/part-of: hpa-platform
     spec:
       containers:
         - name: casbin-ext-authz
@@ -42,6 +50,24 @@ spec:
             requests:
               memory: "128Mi"
               cpu: "100m"
+          # Liveness probe - check if process is running
+          livenessProbe:
+            grpc:
+              port: 9001
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # Readiness probe - check if ready to accept traffic
+          readinessProbe:
+            exec:
+              command:
+                - /bin/grpc_health_probe
+                - -addr=:9001
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
       volumes:
         - name: casbin-config
           configMap:

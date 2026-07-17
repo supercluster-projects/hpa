@@ -1,4 +1,3 @@
-
 # ── GSD baseline (auto-generated) ──
 .gsd
 .gsd-worktrees/
@@ -26,6 +25,8 @@ lpt[1-9].*
 .idea/
 .vscode/
 *.code-workspace
+
+# Environment files (secrets)
 .env
 !.env.example
 .env.backup
@@ -34,18 +35,36 @@ lpt[1-9].*
 *.tfstate
 *.tfstate.backup
 .terraform/
+
+# Node modules and build artifacts
 node_modules/
 .next/
 dist/
 build/
+
+# Python artifacts
 __pycache__/
 *.pyc
+
+# Python virtual environments
 .venv/
 venv/
+
+# Rust build artifacts
 target/
+
+# Go vendor and test artifacts
 vendor/
 *.log
 coverage/
+*.out
+*.cov
+
+# Rust test artifacts
+Cargo.lock
+**/Cargo.lock
+
+# Cache and temp directories
 .cache/
 tmp/
 

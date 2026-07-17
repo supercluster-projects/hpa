@@ -16,6 +16,12 @@ spec:
       annotations:
         autoscaling.knative.dev/min-scale: "1"
         autoscaling.knative.dev/max-scale: "10"
+        # Health check probe configuration
+        run.googleapis.com/health-check-path: /health
+        run.googleapis.com/health-check-port: 8080
+        run.googleapis.com/health-check-interval: 10s
+        run.googleapis.com/health-check-timeout: 5s
+        run.googleapis.com/health-check-period: 30s
     spec:
       containers:
         - image: ${HARBOR_SERVICE}/library/hpa-workloads/welcome:latest
@@ -28,5 +34,11 @@ spec:
             - secretRef:
                 name: welcome-infisical-secrets
                 optional: true
-      # Resource requests and limits for Knative
-      # Note: Knative uses container-level resources, not pod-level
+          # Resource requests and limits for Knative
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi

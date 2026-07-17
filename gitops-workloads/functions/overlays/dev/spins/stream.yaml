@@ -1,11 +1,25 @@
-apiVersion: core.spinoperator.dev/v1alpha1
+apiVersion: core.spinoperator.dev/v1
 kind: SpinApp
 metadata:
   name: stream
   namespace: hpa-workloads
+  labels:
+    app.kubernetes.io/name: stream
+    app.kubernetes.io/instance: stream-service
+    app.kubernetes.io/component: spin-function
+    app.kubernetes.io/part-of: hpa-platform
+    app.kubernetes.io/managed-by: argocd
 spec:
   image: harbor.harbor.svc.cluster.local/library/hpa-workloads/stream:latest
   replicas: 1
   executor: default
   environment:
     KEYDB_URL: "redis://keydb.keydb.svc.cluster.local:6379/"
+  # Resource requests and limits for the stream service
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
