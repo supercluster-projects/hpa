@@ -76,41 +76,59 @@ esac
 # Derive network address from CIDR (strip the /prefix)
 NETWORK_ADDR="${CIDR%/*}"
 
-# ---- Step 1: Check if bridge already exists -------------------------------
+# ---- Step 1: Ensure bridge exists with correct DHCP hosts -----------------
 echo "[$(date +%H:%M:%S)] Checking if network '${BRIDGE}' exists..." >&2
+
 if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' already exists. Destroying and undefining for fresh creation with latest DHCP leases..." >&2
-  virsh -c qemu:///system net-destroy "${BRIDGE}" >/dev/null 2>&1 || true
-  virsh -c qemu:///system net-undefine "${BRIDGE}" >/dev/null 2>&1 || true
+  # ---- Network EXISTS: inject any missing DHCP host entries in-place ------
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' exists. Verifying DHCP host entries..." >&2
+
+  for entry in "${DHCP_HOSTS[@]}"; do
+    IFS='|' read -r name mac ip <<< "$entry"
+
+    # Check the persistent XML definition for existing host entries (more reliable than leases)
+    if virsh -c qemu:///system net-dumpxml "${BRIDGE}" 2>/dev/null | grep -q "mac='${mac}'"; then
+      echo "[$(date +%H:%M:%S)]   DHCP host '${name}' (${mac} -> ${ip}) already present, skipping." >&2
+      continue
+    fi
+
+    # Use virsh net-update to inject the static DHCP host without disrupting running VMs
+    echo "[$(date +%H:%M:%S)]   Adding DHCP host: ${name} (${mac} -> ${ip})" >&2
+    virsh -c qemu:///system net-update "${BRIDGE}" \
+      add-last ip-dhcp-host \
+      "<host name='${name}' mac='${mac}' ip='${ip}'/>" \
+      --config 2>/dev/null || true
+  done
+
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' DHCP hosts verified." >&2
+
 else
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Will create." >&2
-fi
+  # ---- Network DOES NOT EXIST: create from XML ----------------------------
+  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' not found. Creating..." >&2
 
-# ---- Step 2: Prepare network XML ------------------------------------------
-# Build DHCP range: if DHCP_START starts with '.', prepend the network prefix
-DHCP_FULL_START="${DHCP_START}"
-DHCP_FULL_END="${DHCP_END}"
-if [[ "${DHCP_START}" == .* ]]; then
-  NET_PREFIX="${NETWORK_ADDR%.*}"
-  DHCP_FULL_START="${NET_PREFIX}${DHCP_START}"
-fi
-if [[ "${DHCP_END}" == .* ]]; then
-  NET_PREFIX="${NETWORK_ADDR%.*}"
-  DHCP_FULL_END="${NET_PREFIX}${DHCP_END}"
-fi
+  # Build DHCP range: if DHCP_START starts with '.', prepend the network prefix
+  DHCP_FULL_START="${DHCP_START}"
+  DHCP_FULL_END="${DHCP_END}"
+  if [[ "${DHCP_START}" == .* ]]; then
+    NET_PREFIX="${NETWORK_ADDR%.*}"
+    DHCP_FULL_START="${NET_PREFIX}${DHCP_START}"
+  fi
+  if [[ "${DHCP_END}" == .* ]]; then
+    NET_PREFIX="${NETWORK_ADDR%.*}"
+    DHCP_FULL_END="${NET_PREFIX}${DHCP_END}"
+  fi
 
-NET_XML=$(mktemp /tmp/hpa-bridge-net-XXXXXX.xml)
-trap 'rm -f "${NET_XML}"' EXIT
+  NET_XML=$(mktemp /tmp/hpa-bridge-net-XXXXXX.xml)
+  trap 'rm -f "${NET_XML}"' EXIT
 
-# Build static DHCP host entries from DHCP_HOSTS array
-# XML host fragment: <host name=... and <host mac=... and <host ip=...
-HOST_XML=""
-for entry in "${DHCP_HOSTS[@]}"; do
-  IFS='|' read -r name mac ip <<< "$entry"
-  HOST_XML+="      <host name='${name}' mac='${mac}' ip='${ip}'/>"$'\n'
-done
+  # Build static DHCP host entries from DHCP_HOSTS array
+  HOST_XML=""
+  for entry in "${DHCP_HOSTS[@]}"; do
+    IFS='|' read -r name mac ip <<< "$entry"
+    HOST_XML+="      <host name='${name}' mac='${mac}' ip='${ip}'/>"$'\n'
+  done
 
-cat > "${NET_XML}" <<EOF
+  cat > "${NET_XML}" <<EOF
 <network>
   <name>${BRIDGE}</name>
   <forward mode='nat'>
@@ -127,16 +145,16 @@ ${HOST_XML}    </dhcp>
 </network>
 EOF
 
-# ---- Step 3: Define and start the network ---------------------------------
-echo "[$(date +%H:%M:%S)] Defining network '${BRIDGE}' from XML..." >&2
-virsh -c qemu:///system net-define "${NET_XML}" > /dev/null
-echo "[$(date +%H:%M:%S)] Network defined successfully." >&2
+  echo "[$(date +%H:%M:%S)] Defining network '${BRIDGE}' from XML..." >&2
+  virsh -c qemu:///system net-define "${NET_XML}" > /dev/null
+  echo "[$(date +%H:%M:%S)] Network defined successfully." >&2
 
-echo "[$(date +%H:%M:%S)] Starting network '${BRIDGE}'..." >&2
-virsh -c qemu:///system net-start "${BRIDGE}" > /dev/null
-echo "[$(date +%H:%M:%S)] Network started successfully." >&2
+  echo "[$(date +%H:%M:%S)] Starting network '${BRIDGE}'..." >&2
+  virsh -c qemu:///system net-start "${BRIDGE}" > /dev/null
+  echo "[$(date +%H:%M:%S)] Network started successfully." >&2
+fi
 
-# ---- Step 4: Verify -------------------------------------------------------
+# ---- Step 2: Verify -------------------------------------------------------
 virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1
 echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' is active and ready." >&2
 exit 0

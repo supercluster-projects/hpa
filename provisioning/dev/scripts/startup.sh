@@ -286,22 +286,25 @@ try:
     out = subprocess.check_output(['tofu', 'output', '-json'], cwd='${TFDIR}')
     outputs = json.loads(out)
     tc = outputs['talosconfig']['value']
+    # Derive IPs from CIDR base — same formula as locals.tf
+    cidr = '${DEV_CIDR_BLOCK}'
+    net_base = '.'.join(cidr.split('.')[:3])
+    cp_ips = [f'{net_base}.{100 + i}' for i in range(${DEV_CP_COUNT})]
+    worker_ips = [f'{net_base}.{110 + i}' for i in range(${DEV_WORKER_COUNT})]
+    all_ips = cp_ips + worker_ips
+    all_nodes = all_ips  # nodes list = same IPs as endpoints
+    endpoints_yaml = '\\n'.join(f'    - {ip}' for ip in all_ips)
+    nodes_yaml = '\\n'.join(f'    - {ip}' for ip in all_ips)
     config = f'''context: hpa-dev
 contexts:
   hpa-dev:
     ca: {tc['ca_certificate']}
     crt: {tc['client_certificate']}
     endpoints:
-    - 192.168.122.100
-    - 192.168.122.110
-    - 192.168.122.111
-    - 192.168.122.112
+{endpoints_yaml}
     key: {tc['client_key']}
     nodes:
-    - 192.168.122.100
-    - 192.168.122.110
-    - 192.168.122.111
-    - 192.168.122.112
+{nodes_yaml}
 '''
     with open('${TFDIR}/talosconfig', 'w') as f:
         f.write(config)
@@ -393,7 +396,7 @@ step() {
   fi
 }
 
-TOTAL_STEPS=29
+TOTAL_STEPS=25
 
 # Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
 step 2 "Install Cilium CNI"         ./install-cilium.sh ./verify-cilium.sh

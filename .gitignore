@@ -36,6 +36,7 @@ prebuilt-images
 *.tfstate
 *.tfstate.backup
 .terraform/
+*.auto.tfvars
 
 # Node modules and build artifacts
 node_modules/
