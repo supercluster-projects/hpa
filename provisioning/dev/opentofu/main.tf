@@ -2,7 +2,7 @@
 #
 # Covers the full bootstrap lifecycle:
 #   1. Generate machine secrets (TLS + token)
-#   2. Create OS disk volumes (COW clones of pre-installed Talos qcow2)
+#   2. Create OS disk volumes from pre-built raw images
 #   3. Create raw empty Ceph disk volumes for worker nodes
 #   4. Define libvirt domains (VMs) with OS + ceph disks
 #   5. Generate Talos machine configurations (controlplane + worker)
@@ -32,15 +32,25 @@ data "talos_machine_configuration" "controlplane" {
   machine_type     = "controlplane"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
+  talos_version    = var.TALOS_VERSION
 
-  config_patches = [
+  config_patches = concat([
     templatefile("${path.module}/cluster-config.yaml.tftpl", {
       gateway           = local.gateway
       cidr_block        = local.cidr_block
       cp_node_names     = join(",", local.cp_node_names)
       worker_node_names = join(",", local.worker_node_names)
     }),
-  ]
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ])
 }
 
 data "talos_machine_configuration" "worker" {
@@ -48,6 +58,7 @@ data "talos_machine_configuration" "worker" {
   machine_type     = "worker"
   cluster_endpoint = local.cluster_endpoint
   machine_secrets  = talos_machine_secrets.this.machine_secrets
+  talos_version    = var.TALOS_VERSION
 
   config_patches = concat([
     templatefile("${path.module}/cluster-config.yaml.tftpl", {
@@ -75,38 +86,49 @@ data "talos_machine_configuration" "worker" {
 # ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
-# Step 2d: Talos base volume and cloned OS disk volumes
+# Step 2d: OS disk volumes (using pre-built raw images)
 # ---------------------------------------------------------------------------
-# Base volume pointing to the host-cached Talos qcow2 image (uses v0.9.x schema)
+
+# ---------------------------------------------------------------------------
+# Step 2c: Talos base volume (QCOW2 metal image from local cache or remote factory)
+# ---------------------------------------------------------------------------
 resource "libvirt_volume" "talos_base" {
   name = "talos-base.qcow2"
   pool = "default"
 
-  target = {
-    format = { type = "qcow2" }
-  }
-
   create = {
     content = {
-      url = "file://${var.local_image_path}"
+      url = var.local_image_path != "" ? "file://${var.local_image_path}" : "${var.DEV_TALOS_IMAGE_FACTORY_URL}/${local.talos_schematic_id}/${var.TALOS_VERSION}/metal-amd64.qcow2"
+    }
+  }
+
+  target = {
+    format = {
+      type = "qcow2"
     }
   }
 }
 
-# OS disk volumes cloned from the base volume (uses v0.9.x schema)
+# ---------------------------------------------------------------------------
+# Step 2d: OS disk volumes (using QCOW2 COW clones)
+# ---------------------------------------------------------------------------
 resource "libvirt_volume" "os_disk" {
   for_each = toset(local.all_node_names)
   name     = "${each.key}-os.qcow2"
   pool     = "default"
-  capacity = var.DEV_OS_DISK_SIZE_GB * 1073741824
+  capacity = var.DEV_OS_DISK_SIZE_GB * 1024 * 1024 * 1024
 
   backing_store = {
-    path   = libvirt_volume.talos_base.path
-    format = { type = "qcow2" }
+    path = libvirt_volume.talos_base.path
+    format = {
+      type = "qcow2"
+    }
   }
 
   target = {
-    format = { type = "qcow2" }
+    format = {
+      type = "qcow2"
+    }
   }
 }
 
@@ -158,8 +180,7 @@ resource "libvirt_domain" "node" {
   devices = {
     disks = concat(
       [
-        # OS disk: cloned from pre-cached Talos qcow2 image.
-        # Direct disk boot skips CDROM boot menus and avoids installation loops.
+        # OS disk: QCOW2 COW clone of the base Talos image.
         {
           source = {
             volume = {
@@ -175,7 +196,17 @@ resource "libvirt_domain" "node" {
             type = "qcow2"
           }
         },
-      ],
+      ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ]),
       each.value.type == "worker" ? [
         # Ceph disk: file-backed sparse raw disk on the host.
         # Stored in /var/lib/libvirt/images/ceph-disks so data survives cluster recreation.
@@ -193,7 +224,17 @@ resource "libvirt_domain" "node" {
             type = "raw"
           }
         },
-      ] : []
+      ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ]) : []
     )
 
     interfaces = [
@@ -208,17 +249,41 @@ resource "libvirt_domain" "node" {
           address = local.node_macs[each.key]
         }
       },
-    ]
+    ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ])
 
-    # Native interactive serial console.
-    # Exposing as PTY enables interactive "virsh console <domain>" access.
+    # File-based console logging to capture real-time guest OS logs on the host.
     consoles = [
       {
-        type        = "pty"
-        target_port = "0"
-        target_type = "serial"
+        type = "file"
+        source = {
+          path = "/var/log/libvirt/qemu/${each.key}-console.log"
+        }
+        target = {
+          type = "serial"
+          port = "0"
+        }
       }
-    ]
+    ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ])
   }
 
 }
@@ -240,23 +305,46 @@ resource "talos_machine_configuration_apply" "node" {
   endpoint                    = each.value.ip
   apply_mode                  = "auto"
 
-  config_patches = [
+  config_patches = concat([
     yamlencode({
       machine = {
+        install = {
+          disk = "/dev/vda"
+        }
         network = {
           nameservers = local.dns_servers
           interfaces = [
             {
-              interface = "eth0"
+              interface = "enp1s0"
               addresses = ["${each.value.ip}/${split("/", var.DEV_CIDR_BLOCK)[1]}"]
               routes = [
                 {
                   network = "0.0.0.0/0"
                   gateway = local.gateway
                 }
-              ]
+              ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ])
             }
-          ]
+          ])
+    yamlencode({
+      machine = {
+        disks = [
+          {
+            device = "/dev/vdb"
+          }
+        ]
+      }
+    })
+  ])
         }
       }
     })
@@ -284,7 +372,7 @@ resource "talos_machine_bootstrap" "this" {
   ]
 
   timeouts = {
-    create = "20m"
+    create = "60m"
   }
 }
 
@@ -301,6 +389,6 @@ resource "talos_cluster_kubeconfig" "this" {
   ]
 
   timeouts = {
-    create = "20m"
+    create = "60m"
   }
 }

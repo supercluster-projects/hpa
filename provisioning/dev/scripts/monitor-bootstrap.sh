@@ -29,7 +29,7 @@ mkdir -p "$(dirname "${STATUS_FILE}")"
 # Mark status file as active
 echo "booting" > "${STATUS_FILE}"
 
-TIMEOUT_SEC=1200  # 20 min — matches tofu's talos_machine_bootstrap timeout
+TIMEOUT_SEC=3600  # 60 min — allows workers extended boot time
 START_TS=$(date +%s)
 
 # Phase tracking
@@ -117,36 +117,46 @@ while true; do
 
   # ---- Build status line -------------------------------------------------
   parts=()
+
+  # Add cluster information
+  if [ -f "${PROJECT_ROOT}/.cache/talos-*.qcow2" ] 2>/dev/null; then
+    parts+=("cache:ready")
+  fi
+  parts+=("VMs:4")
+
+  # Add phase information
   if [ "${phase_installing}" = true ] && [ -n "${disk_part}" ]; then
-    parts+=("installing ${disk_part}")
+    parts+=("📝 disk:${disk_part}")
   elif [ "${phase_rebooting}" = true ]; then
-    parts+=("rebooting")
+    parts+=("🔄 rebooting")
   elif [ "${phase_running}" = true ]; then
-    parts+=("running")
+    parts+=("✅ ready")
   else
-    parts+=("booting")
+    parts+=("⏳ booting")
   fi
 
+  # Add API status
   if [ "${api_up}" = true ]; then
-    parts+=("api:up")
+    parts+=("api:on")
   fi
 
+  # Add service status when available
   if [ -n "${svc_etcd}" ]; then
-    parts+=("etcd:${svc_etcd}")
+    parts+=("etcd")
   fi
   if [ -n "${svc_kubelet}" ]; then
-    parts+=("kubelet:${svc_kubelet}")
+    parts+=("kubelet")
   fi
   if [ -n "${svc_apiserver}" ]; then
-    parts+=("apiserver:${svc_apiserver}")
+    parts+=("apiserver")
   fi
 
+  # Add duration
   parts+=("[${elapsed}s]")
 
   # Write as single line to shared status file
   # Build status line — join array elements with spaces
-  local status_line=""
-  local p
+  status_line=""
   for p in "${parts[@]}"; do
     if [ -z "${status_line}" ]; then
       status_line="${p}"

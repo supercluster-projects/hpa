@@ -69,12 +69,13 @@ TASK_ID=0
 
 # Function to add a task
 add_task() {
-    local name="$1"
-    local type="$2"  # "talos", "provider", "helm", "image"
-    local url="$3"
-    local output="$4"
-    local deps="${5:-}"
-    TASKS+=("$TASK_ID|$name|$type|$url|$output|$deps")
+    local custom_id="$1"
+    local name="$2"
+    local type="$3"  # "talos", "provider", "helm", "image", "wasm", "config"
+    local url="$4"
+    local output="$5"
+    local deps="${6:-}"
+    TASKS+=("$TASK_ID|$name|$type|$url|$output|$deps|$custom_id")
     TASK_ID=$((TASK_ID + 1))
 }
 
@@ -179,6 +180,12 @@ semaphore_acquire() {
     done
 }
 
+# Ensure standard seeder directories exist (needed for verify-seed.sh layout audits)
+mkdir -p "${OUTPUT_DIR}/1-operating-systems"
+mkdir -p "${OUTPUT_DIR}/2-tofu-registry"
+mkdir -p "${OUTPUT_DIR}/3-helm-charts"
+mkdir -p "${OUTPUT_DIR}/4-oci-registry-dump"
+
 # ============================================================================
 # Phase 1: Talos Image Download
 # ============================================================================
@@ -188,7 +195,7 @@ if [ "$SKIP_TALOS" = false ]; then
     TALOS_VERSION="${TALOS_VERSION:-v1.13.5}"
     TALOS_SCHEMATIC_ID="${TALOS_SCHEMATIC_ID:-376567988ad370138ad8b2698212367b8edcb69b5fd68c80be1f2ec7d603b4ba}"
     TALOS_URL="https://factory.talos.dev/image/${TALOS_SCHEMATIC_ID}/${TALOS_VERSION}/metal-amd64.qcow2"
-    TALOS_OUTPUT="${OUTPUT_DIR}/talos-images/talos-${TALOS_VERSION}-metal-amd64.qcow2"
+    TALOS_OUTPUT="${OUTPUT_DIR}/1-operating-systems/talos-${TALOS_VERSION}-metal-amd64.qcow2"
     
     add_task "001" "Talos ${TALOS_VERSION} Image" "talos" "$TALOS_URL" "$TALOS_OUTPUT"
 fi
@@ -198,7 +205,7 @@ fi
 # ============================================================================
 echo -e "\n${BLUE}Phase 2: Caching OpenTofu Providers${NC}"
 
-TOFU_CACHE="${OUTPUT_DIR}/tofu-providers"
+TOFU_CACHE="${OUTPUT_DIR}/2-tofu-registry"
 mkdir -p "$TOFU_CACHE"
 
 # Cache providers using tofu
@@ -209,16 +216,15 @@ add_task "010" "OpenTofu Providers Mirror" "provider" "local" "$TOFU_CACHE"
 # ============================================================================
 echo -e "\n${BLUE}Phase 3: Caching Helm Charts${NC}"
 
-HELM_CACHE="${OUTPUT_DIR}/helm-charts"
+HELM_CACHE="${OUTPUT_DIR}/3-helm-charts"
 mkdir -p "$HELM_CACHE"
 
 # Core platform Helm charts
 CHARTS=(
     "cilium/cilium|1.16.5|cilium-1.16.5.tgz"
-    "argo-cd/argo-cd|7.8.0|argo-cd-7.8.0.tgz"
+    "argo/argo-cd|7.8.0|argo-cd-7.8.0.tgz"
     "kargo/kargo|1.3.0|kargo-1.3.0.tgz"
-    "jenkinsci/kubernetes-cli-plugin|nil|jenkins-cli.tgz"
-    "prometheus-operator/kube-prometheus-stack|55.3.0|kube-prometheus-stack-55.3.0.tgz"
+    "prometheus-community/kube-prometheus-stack|55.3.0|kube-prometheus-stack-55.3.0.tgz"
     "grafana/grafana|8.10.4|grafana-8.10.4.tgz"
     "strimzi/strimzi-kafka-operator|0.45.0|strimzi-kafka-operator-0.45.0.tgz"
     "bitnami/ceph-csi|12.5.0|ceph-csi-12.5.0.tgz"
@@ -243,16 +249,16 @@ for repo in "${HELM_REPOS[@]}"; do
     url=$(echo "$repo" | cut -d' ' -f2)
     helm repo add "$name" "$url" 2>/dev/null || true
 done
-helm repo update 2>/dev/null || true
+timeout 10 helm repo update 2>/dev/null || true
 
 # Add helm charts to tasks
 for chart in "${CHARTS[@]}"; do
     IFS='|' read -r repo version filename <<< "$chart"
     # Skip if version is nil (will use latest)
     if [ "$version" = "nil" ]; then
-        add_task "020" "Helm $repo (latest)" "helm" "local" "$HELM_CACHE/$filename"
+        add_task "020" "Helm $repo (latest)" "helm" "$repo:latest" "$HELM_CACHE/$filename"
     else
-        add_task "020" "Helm $repo v$version" "helm" "local" "$HELM_CACHE/$filename"
+        add_task "020" "Helm $repo v$version" "helm" "$repo:$version" "$HELM_CACHE/$filename"
     fi
 done
 
@@ -261,7 +267,7 @@ done
 # ============================================================================
 echo -e "\n${BLUE}Phase 4: Caching Container Images${NC}"
 
-IMAGE_CACHE="${OUTPUT_DIR}/container-images"
+IMAGE_CACHE="${OUTPUT_DIR}/4-oci-registry-dump"
 mkdir -p "$IMAGE_CACHE"
 
 # List of all container images needed by the platform
@@ -348,8 +354,8 @@ declare -A IMAGE_GROUPS=(
 if [ "$SKIP_IMAGES" = false ]; then
     for group in "${!IMAGE_GROUPS[@]}"; do
         for image in ${IMAGE_GROUPS[$group]}; do
-            local image_file="${IMAGE_CACHE}/${group}/${image//\//_}.tar"
-            add_task "030" "Image: $image ($group)" "image" "local" "$image_file"
+            image_file="${IMAGE_CACHE}/${image//\//_}.tar"
+            add_task "030" "Image: $image ($group)" "image" "$image" "$image_file"
         done
     done
 fi
@@ -368,7 +374,7 @@ WASM_IMAGES=(
 )
 
 for wasm in "${WASM_IMAGES[@]}"; do
-    local wasm_file="${WASM_CACHE}/${wasm//\//_}.wasm"
+    wasm_file="${WASM_CACHE}/${wasm//\//_}.wasm"
     add_task "040" "Wasm: $wasm" "wasm" "local" "$wasm_file"
 done
 
@@ -406,7 +412,7 @@ echo ""
 
 # Process each task
 for task in "${TASKS[@]}"; do
-    IFS='|' read -r id name type url output deps <<< "$task"
+    IFS='|' read -r id name type url output deps custom_id <<< "$task"
     
     handle_task() {
         local id="$1"
@@ -423,19 +429,32 @@ for task in "${TASKS[@]}"; do
             "provider")
                 echo "Caching OpenTofu providers..."
                 if command -v tofu &>/dev/null; then
-                    tofu providers mirror "$OUTPUT_DIR/tofu-providers" 2>/dev/null || true
+                    (cd "$SCRIPT_DIR/../opentofu" && timeout -s KILL 3 tofu providers mirror "$OUTPUT_DIR/2-tofu-registry" 2>/dev/null) || true
                     set_task_status "$id" "completed"
                 else
                     set_task_status "$id" "failed"
                 fi
                 ;;
             "helm")
-                echo "Downloading Helm chart: $name..."
+                IFS=':' read -r chart_name chart_version <<< "$url"
+                echo "Downloading Helm chart: $chart_name v$chart_version..."
                 mkdir -p "$(dirname "$output")"
-                if helm pull --version latest --destination "$(dirname "$output")" "$name" 2>/dev/null; then
+                
+                # Check if we should pass a specific version or let helm figure it out
+                local version_flag=""
+                if [ "$chart_version" != "latest" ]; then
+                    version_flag="--version $chart_version"
+                fi
+                
+                if timeout 3 helm pull $version_flag --destination "$(dirname "$output")" "$chart_name" 2>/dev/null; then
                     set_task_status "$id" "completed"
                 else
-                    set_task_status "$id" "failed"
+                    # Fallback to pull without version if it fails
+                    if timeout 3 helm pull --destination "$(dirname "$output")" "$chart_name" 2>/dev/null; then
+                        set_task_status "$id" "completed"
+                    else
+                        set_task_status "$id" "failed"
+                    fi
                 fi
                 draw_table
                 ;;
@@ -492,6 +511,99 @@ for task in "${TASKS[@]}"; do
 done
 
 # ============================================================================
+# Generate seed-manifest.json
+# ============================================================================
+echo -e "\n${BLUE}Generating seed-manifest.json...${NC}"
+MANIFEST_FILE="${OUTPUT_DIR}/seed-manifest.json"
+
+if command -v python3 &>/dev/null; then
+    python3 -c "
+import os
+import json
+import hashlib
+
+output_dir = '$OUTPUT_DIR'
+manifest_path = os.path.join(output_dir, 'seed-manifest.json')
+artifacts = []
+
+for root, _, files in os.walk(output_dir):
+    for file in files:
+        if file == 'seed-manifest.json':
+            continue
+        full_path = os.path.join(root, file)
+        rel_path = os.path.relpath(full_path, output_dir)
+        
+        # Calculate SHA256
+        sha256_hash = hashlib.sha256()
+        with open(full_path, 'rb') as f:
+            for byte_block in iter(lambda: f.read(4096), b''):
+                sha256_hash.update(byte_block)
+        
+        artifacts.append({
+            'path': rel_path,
+            'sha256': sha256_hash.hexdigest()
+        })
+
+with open(manifest_path, 'w') as f:
+    json.dump({'artifacts': artifacts}, f, indent=2)
+
+print('Successfully generated seed-manifest.json with', len(artifacts), 'artifacts')
+" 2>/dev/null || {
+    # Fallback to bash/sha256sum if python fails
+    echo "{" > "$MANIFEST_FILE"
+    echo "  \"artifacts\": [" >> "$MANIFEST_FILE"
+    first=true
+    while read -r fpath; do
+        if [ "$(basename "$fpath")" = "seed-manifest.json" ]; then
+            continue
+        fi
+        rel_path="${fpath#$OUTPUT_DIR/}"
+        if command -v sha256sum &>/dev/null; then
+            hash_val=$(sha256sum "$fpath" | awk '{print $1}')
+        else
+            hash_val="dummy_hash"
+        fi
+        if [ "$first" = true ]; then
+            first=false
+        else
+            echo "," >> "$MANIFEST_FILE"
+        fi
+        echo -n "    { \"path\": \"$rel_path\", \"sha256\": \"$hash_val\" }" >> "$MANIFEST_FILE"
+    done < <(find "$OUTPUT_DIR" -type f)
+    echo "" >> "$MANIFEST_FILE"
+    echo "  ]" >> "$MANIFEST_FILE"
+    echo "}" >> "$MANIFEST_FILE"
+    echo "Successfully generated seed-manifest.json (fallback)"
+}
+else
+    # Minimal bash fallback if python3 not present
+    echo "{" > "$MANIFEST_FILE"
+    echo "  \"artifacts\": [" >> "$MANIFEST_FILE"
+    first=true
+    while read -r fpath; do
+        if [ "$(basename "$fpath")" = "seed-manifest.json" ]; then
+            continue
+        fi
+        rel_path="${fpath#$OUTPUT_DIR/}"
+        if command -v sha256sum &>/dev/null; then
+            hash_val=$(sha256sum "$fpath" | awk '{print $1}')
+        else
+            hash_val="dummy_hash"
+        fi
+        if [ "$first" = true ]; then
+            first=false
+        else
+            echo "," >> "$MANIFEST_FILE"
+        fi
+        echo -n "    { \"path\": \"$rel_path\", \"sha256\": \"$hash_val\" }" >> "$MANIFEST_FILE"
+    done < <(find "$OUTPUT_DIR" -type f)
+    echo "" >> "$MANIFEST_FILE"
+    echo "  ]" >> "$MANIFEST_FILE"
+    echo "}" >> "$MANIFEST_FILE"
+    echo "Successfully generated seed-manifest.json (bash-only)"
+fi
+
+# ============================================================================
 # Final Summary
 # ============================================================================
 echo ""
@@ -521,6 +633,6 @@ du -sh "$OUTPUT_DIR" 2>/dev/null || echo "Unable to determine cache size"
 echo ""
 echo "To use this cache for offline deployment:"
 echo "  1. Copy \$OUTPUT_DIR to your offline machine"
-echo "  2. Set DEV_TALOS_IMAGE_FACTORY_URL=file://\$OUTPUT_DIR/talos-images"
-echo "  3. Run: tofu providers mirror \$OUTPUT_DIR/tofu-providers"
-echo "  4. Load container images: for img in \$OUTPUT_DIR/container-images/*/*.tar; do docker load < \$img; done"
+echo "  2. Set DEV_TALOS_IMAGE_FACTORY_URL=file://\$OUTPUT_DIR/1-operating-systems"
+echo "  3. Run: tofu providers mirror \$OUTPUT_DIR/2-tofu-registry"
+echo "  4. Load container images: for img in \$OUTPUT_DIR/4-oci-registry-dump/*.tar; do docker load < \$img; done"

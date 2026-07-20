@@ -133,3 +133,9 @@ variable "local_image_path" {
   type        = string
   default     = ""
 }
+
+variable "prebuilt_images_dir" {
+  description = "Path to the pre-built raw disk images"
+  type        = string
+  default     = "/home/cores/Documents/Projects/Study/HPA/with-gsd/prebuilt-images"
+}

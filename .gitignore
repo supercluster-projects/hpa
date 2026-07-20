@@ -25,6 +25,7 @@ lpt[1-9].*
 .idea/
 .vscode/
 *.code-workspace
+prebuilt-images
 
 # Environment files (secrets)
 .env
@@ -70,3 +71,6 @@ tmp/
 
 # ── GSD baseline (auto-generated) ──
 .gsd-backups/
+
+# ── GSD baseline (auto-generated) ──
+.env.*

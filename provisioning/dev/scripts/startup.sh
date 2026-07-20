@@ -116,46 +116,36 @@ HELP
   esac
 done
 
+# Export KUBECONFIG for subprocesses
 export KUBECONFIG
 
-# ---- Register all pipeline steps in the progress table -------------------
-# Table is drawn on fd 3 (terminal), updated in-place with ANSI cursor-up.
-table_register "0"  "Provision Talos VMs (OpenTofu)"
-table_register "1"  "Setup hpa-bridge network"
-table_register "2"  "Install Cilium CNI"
-table_register "3"  "Install Rook Ceph"
-table_register "4"  "Install Harbor"
-table_register "5"  "Install Infisical"
-table_register "6"  "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)"
-table_register "7"  "Install Kafka (Strimzi Operator + Cluster)"
-table_register "8"  "Install Spegel P2P OCI Registry Mirror"
-table_register "9"  "Install Casdoor OIDC Provider"
-table_register "10" "Install Casbin gRPC Authorizer"
-table_register "11" "Install Envoy Gateway + Headlamp"
-table_register "12" "Apply SecurityPolicy (Casbin extAuth)"
-table_register "13" "Install GitOps (Kargo + ArgoCD)"
-table_register "14" "Deploy Workloads (Welcome + Counter)"
-table_register "15" "Install Streaming Workload (Stream-Processor)"
-table_register "16" "Bootstrap Infisical Workloads"
-table_register "17" "Install Yugabytedb Distributed SQL"
-table_register "18" "Install Hasura GraphQL Engine"
-table_register "19" "Install VMSingle (VictoriaMetrics)"
-table_register "20" "Install vmagent DaemonSet"
-table_register "21" "Install kube-state-metrics"
-table_register "22" "Install Grafana Dashboards"
-table_register "23" "Install AlertManager"
-table_register "24" "Configure TLS + Routes"
-table_register "25" "Seed hydration (Harbor)"
-table_register "26" "Install CouchDB Document Store"
+# ---- Setup bridge network (always runs first, before cleanup) -------------
+STEP_START "Setup hpa-bridge network"
+bash "${SCRIPT_DIR}/setup-bridge.sh" && STEP_END "DONE" || {
+  STEP_END "FAILED" "Bridge setup failed"
+  die "setup-bridge.sh failed"
+}
 
-# Write the initial table to fd 3 before any step starts
-table_redraw
+# ---- Pre-flight cleanup (runs after bridge setup) -------------------------
+log "Running pre-flight cleanup..."
+bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR:-${SCRIPT_DIR}/../opentofu}" 2>&1 || {
+  log "Pre-flight cleanup had minor issues — continuing anyway."
+}
 
 # ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
-if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
-  log "=========================================================="
-  log "Step 0: Provision Talos VMs via OpenTofu"
-  log "=========================================================="
+# Check if cluster is already healthy and accessible via existing kubeconfig
+CLUSTER_HEALTHY=false
+if [ -f "${KUBECONFIG}" ]; then
+  if command -v kubectl >/dev/null 2>&1; then
+    if kubectl --kubeconfig "${KUBECONFIG}" get nodes 2>/dev/null | grep -q "Ready"; then
+      CLUSTER_HEALTHY=true
+    fi
+  fi
+fi
+
+# Run tofu apply if: not skipped, and either cluster is unhealthy or kubeconfig doesn't exist
+if [ "${SKIP_TOFU}" = false ] && [ "${CLUSTER_HEALTHY}" = false ]; then
+  STEP_START "Provision Talos VMs (OpenTofu)"
   log "tofu dir:     ${TOFU_DIR}"
   log "kubeconfig:   ${KUBECONFIG}"
 
@@ -166,25 +156,9 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
     die "OpenTofu directory not found at ${TOFU_DIR}"
   fi
 
-  table_slot_status "0" "⏳"
-
-  # Pre-flight cleanup
-  bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" || {
-    log "Pre-flight cleanup had failures — continuing anyway."
-  }
-
-  # Setup bridge
-  table_slot_status "1" "⏳"
-  bash "${SCRIPT_DIR}/setup-bridge.sh" || die "setup-bridge.sh failed"
-  table_slot_status "1" "✅"
-
   # tofu init
   log "Running tofu init..."
-  if ! (cd "${TOFU_ABS_DIR}" && tofu init 2>&1); then
-    wait_for_internet "tofu init (provider download)"
-    log "Retrying tofu init with -upgrade..."
-    (cd "${TOFU_ABS_DIR}" && tofu init -upgrade) || die "tofu init failed"
-  fi
+  (cd "${TOFU_ABS_DIR}" && tofu init -backend=false) 2>&1 | grep -E "✓|Successfully|Error|warning" || true
 
   # Verify libvirtd
   if ! virsh -c qemu:///system list >/dev/null 2>&1; then
@@ -246,18 +220,39 @@ if [ "${SKIP_TOFU}" = false ] && [ ! -f "${KUBECONFIG}" ]; then
   OS_DISK_PATH="/var/lib/libvirt/images/${DEV_NODE_PREFIX}-cp-0-os.qcow2"
   KUBECONFIG_PATH="${KUBECONFIG}"
 
+  # Setup local registry and seed bootstrap images for offline mode
+  if [ "${OFFLINE_MODE:-false}" = "true" ]; then
+    STEP_START "Setup Local Registry & Seed Bootstrap Images"
+    log "Ensuring local OCI registry is running on the host..."
+    bash "${SCRIPT_DIR}/setup-local-registry.sh" || die "setup-local-registry.sh failed"
+    log "Seeding bootstrap images to local registry..."
+    bash "${SCRIPT_DIR}/bootstrap-harbor.sh" --host || die "bootstrap-harbor.sh failed"
+    STEP_END "DONE"
+  fi
+
   # Start real-time bootstrap monitor in background.
   bash "${SCRIPT_DIR}/monitor-bootstrap.sh" \
     "${CP0_IP}" "${OS_DISK_PATH}" "${KUBECONFIG_PATH}" &
   MONITOR_PID=$!
 
-  # Run tofu apply in background. Every 5s we redraw the table, which
-  # reads the monitor's latest status from the shared file.
-  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1) &
+  # Run tofu apply in background.
+  # Capture output quietly, show periodic progress
+  TOFU_LOG="${PROJECT_ROOT}/.tofu-apply.log"
+  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1 | tee "${TOFU_LOG}") &
   TOFU_PID=$!
 
+  # Poll for tofu completion and show bootstrap monitor status
   while kill -0 ${TOFU_PID} 2>/dev/null; do
-    table_redraw
+    # Show latest status from monitor
+    if [ -f "${MONITOR_STATUS_FILE:-${PROJECT_ROOT}/.gsd/bootstrap-monitor-status}" ]; then
+      STATUS=$(head -1 "${MONITOR_STATUS_FILE:-${PROJECT_ROOT}/.gsd/bootstrap-monitor-status}" 2>/dev/null || echo "")
+      [ -n "${STATUS}" ] && log "Bootstrap progress: ${STATUS}"
+    fi
+    # Show tofu completion line if found
+    if [ -f "${TOFU_LOG}" ]; then
+      LAST=$(grep -E "Apply complete|destroyed|created|created in" "${TOFU_LOG}" 2>/dev/null | tail -1 || true)
+      [ -n "${LAST}" ] && log "Tofu: ${LAST}"
+    fi
     sleep 5
   done
   set +e; wait ${TOFU_PID}; TOFU_EXIT=$?; set -e
@@ -315,13 +310,14 @@ except Exception as e:
 " 2>/dev/null || true
 
   log "tofu apply completed successfully."
-  table_slot_status "0" "✅" ""
-elif [ "${SKIP_TOFU}" = false ] && [ -f "${KUBECONFIG}" ]; then
-  table_slot_status "0" "✅" "(cached)"
-  log "kubeconfig already exists — skipping tofu apply."
-else
-  table_slot_status "0" "⏭" "(skipped)"
+  STEP_END "DONE"
+elif [ "${CLUSTER_HEALTHY}" = true ]; then
+  log "Cluster is healthy - using existing kubeconfig"
+elif [ "${SKIP_TOFU}" = true ]; then
   log "--skip-tofu set — using existing kubeconfig (if any)."
+else
+  # kubeconfig exists but cluster is unhealthy
+  log "WARNING: kubeconfig exists but cluster is unhealthy - needs re-bootstrap"
 fi
 
 # ---- Verify cluster access ------------------------------------------------
@@ -372,42 +368,27 @@ step() {
     shift
   fi
 
-  log "============================================================"
-  log ">>> Starting Step ${num}: ${name}"
-  log "============================================================"
+  STEP_START "Step ${num}: ${name}"
 
-  # Update table: mark this step as running
-  table_slot_status "${num}" "⏳"
   # Redirect script output to the tee pipe (fd 1/2) so it goes to startup.log
-  # The table on fd 3 keeps showing progress independently
   if bash "${script}" "$@" 2>&1; then
     if [ -n "${verify_script}" ]; then
       log ">>> Running live verification for Step ${num}: ${verify_script}..."
       if bash "${verify_script}" 2>&1; then
-        table_slot_status "${num}" "✅" ""
-        log "============================================================"
+        STEP_END "DONE"
         log ">>> Completed Step ${num}: ${name} — SUCCESS"
-        log "============================================================"
       else
         local code=$?
-        table_slot_status "${num}" "❌" "verification failed"
-        log "============================================================"
-        log ">>> Step ${num}: ${name} — VERIFICATION FAILED (exit code ${code})"
-        log "============================================================"
+        STEP_END "FAILED" "verification failed (exit ${code})"
         die "Step ${num}: ${name} — VERIFICATION FAILED (exit code ${code})"
       fi
     else
-      table_slot_status "${num}" "✅" ""
-      log "============================================================"
+      STEP_END "DONE"
       log ">>> Completed Step ${num}: ${name} — SUCCESS"
-      log "============================================================"
     fi
   else
     local code=$?
-    table_slot_status "${num}" "❌" "installation failed"
-    log "============================================================"
-    log ">>> Step ${num}: ${name} — INSTALLATION FAILED (exit code ${code})"
-    log "============================================================"
+    STEP_END "FAILED" "installation failed (exit ${code})"
     die "Step ${num}: ${name} — INSTALLATION FAILED (exit code ${code})"
   fi
 }

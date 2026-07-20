@@ -3,10 +3,13 @@
 # cleanup-preflight.sh — Pre-flight cleanup before tofu apply
 #
 # Destroys all running libvirt VMs matching the node prefix, removes
-# OS disk volumes and the Talos ISO, and removes stale entries from
+# OS disk volumes and the Talos base volume, and removes stale entries from
 # the local tofu state so they are re-created fresh.
 #
-# Preserves Ceph storage disks — they are reused across runs.
+# Preserves:
+#   - Ceph storage disks (reused across runs)
+#   - Talos ISO (if exists, skipped)
+#   - Talos cache file (${PROJECT_ROOT}/.cache/talos-*.qcow2)
 #
 # Called automatically by startup.sh before the tofu apply step.
 # Can also be run standalone: ./cleanup-preflight.sh [--prefix hpa-node]
@@ -52,7 +55,7 @@ fi
 
 # ---- Step 2: Remove OS disk volumes (preserve Ceph disks) -----------------
 log "Step 2: Removing OS disk volumes (preserving Ceph disks)..."
-VOL_NAMES=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && $1 ~ /-os\.qcow2$/ {print $1}' || true)
+VOL_NAMES=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && ($1 ~ /-os\.qcow2$/ || $1 ~ /-os\.raw$/) {print $1}' || true)
 if [ -n "${VOL_NAMES}" ]; then
   while IFS= read -r vol; do
     [ -z "${vol}" ] && continue
@@ -79,36 +82,48 @@ else
   log "  No ISO clone volumes found."
 fi
 
-# ---- Step 3: Preserve Talos ISO if version is unchanged -------------------
+# ---- Step 3: Check Talos ISO volume (preserve if exists) ------------------
 log "Step 3: Checking Talos ISO volume..."
 ISO_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-install\.iso/ {print $1}' || true)
 if [ -n "${ISO_VOL}" ]; then
-  log "  Talos ISO volume '${ISO_VOL}' already exists — preserving it (version unchanged)."
+  log "  Talos ISO volume '${ISO_VOL}' exists - preserving it"
   SKIP_ISO=true
 else
-  log "  No Talos ISO volume found — will be downloaded."
+  log "  No Talos ISO volume found - will be downloaded"
   SKIP_ISO=false
 fi
 
-# ---- Step 4: Remove talos-base.qcow2 if it exists -------------------------
-log "Step 4: Removing Talos base qcow2 volume..."
-BASE_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/^talos-base\.qcow2$/ {print $1}' || true)
+# ---- Step 4: Handle Talos base qcow2 volume -------------------------------
+# The base volume is created from a cache file by the libvirt provider.
+# We remove any stale volume so tofu can recreate it fresh from the cache.
+# The cache file at ${PROJECT_ROOT}/.cache/talos-*.qcow2 is preserved.
+log "Step 4: Ensuring clean Talos base volume state..."
+BASE_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-base\.qcow2/ {print $1}' || true)
 if [ -n "${BASE_VOL}" ]; then
-  log "  Deleting base volume: ${BASE_VOL}"
+  log "  Removing stale talos-base volume (will be recreated from cache)..."
   sudo virsh vol-delete --pool default "${BASE_VOL}" 2>/dev/null || true
-else
-  log "  No talos-base.qcow2 volume found."
 fi
+
+# Remove from state if present (so tofu can manage it fresh)
+for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.talos_base" || true); do
+  log "  Removing from state: ${key}"
+  tofu state rm "${key}" 2>/dev/null || true
+done
 
 # ---- Step 5: Remove stale libvirt resources from tofu state ---------------
 log "Step 5: Removing stale libvirt resources from tofu state..."
 cd "${TOFU_ABS_DIR}"
 
-for res_type in "libvirt_domain.node" "libvirt_volume.os_disk" "libvirt_volume.talos_base" "null_resource.download_talos_iso"; do
-  for key in $(tofu state list 2>/dev/null | grep "${res_type}" || true); do
-    log "  Removing from state: ${key}"
-    tofu state rm "${key}" 2>/dev/null || true
-  done
+# Always remove VM domains - they need to be created fresh
+for key in $(tofu state list 2>/dev/null | grep "libvirt_domain.node" || true); do
+  log "  Removing from state: ${key}"
+  tofu state rm "${key}" 2>/dev/null || true
+done
+
+# OS disks: always remove from state (per-node volumes)
+for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.os_disk" || true); do
+  log "  Removing from state: ${key}"
+  tofu state rm "${key}" 2>/dev/null || true
 done
 
 # ISO state: only remove if being re-downloaded (version changed)

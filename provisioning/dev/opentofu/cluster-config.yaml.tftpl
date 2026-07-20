@@ -15,8 +15,9 @@ machine:
     net.ipv4.conf.default.rp_filter: "0"
   env:
     # Proxy settings - values interpolated from Terraform locals
-    http_proxy: "http://${gateway}:10809"
-    https_proxy: "http://${gateway}:10809"
+    # Proxy disabled to allow direct internet access for image pulls
+    # http_proxy: "http://${gateway}:10809"
+    # https_proxy: "http://${gateway}:10809"
     no_proxy: "127.0.0.1,localhost,${cidr_block},.cluster.local,${cp_node_names},${worker_node_names}"
   time:
     servers:
@@ -36,11 +37,20 @@ machine:
         # CIDR block interpolated from Terraform locals
         - "${cidr_block}"
 
+  registries:
+    mirrors:
+      registry.k8s.io:
+        endpoints:
+          - http://${gateway}:5000
+      ghcr.io:
+        endpoints:
+          - http://${gateway}:5000
+
   files:
     - path: /etc/cri/conf.d/20-customization.part
       op: create
       content: |
-        [plugins."io.containerd.cri.v1.images"]
+        [plugins."io.containerd.grpc.v1.cri".containerd]
           discard_unpacked_layers = false
 
 cluster:

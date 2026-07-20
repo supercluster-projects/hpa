@@ -47,6 +47,12 @@ Ensure your host machine has the following packages pre-installed:
    ```
    This redirects the platform bootstrapping pipeline to sync manifests from your host machine's filesystem.
 
+4. **Offline Mode Configuration:**
+   The platform operates in **offline-first mode by default**. The `.env.example` contains `OFFLINE_MODE=true`:
+   - Bootstrap images (etcd, kube-apiserver, kubelet, etc.) are pre-seeded to the local registry
+   - Containerd is configured to use registry mirrors for offline image pulls
+   - To disable offline mode (use internet), set `OFFLINE_MODE=false`
+
 ### 3. Bootstrapping the LibVirt Dev Cluster
 
 All operations are automated using shell scripts in `provisioning/dev/scripts/`.
@@ -69,11 +75,58 @@ Download and pre-stage the cached Talos OS `qcow2` image:
 bash provisioning/dev/scripts/prep-cache.sh
 ```
 
-#### Step 3.4: Provision VMs & Deploy Platform
+#### Step 3.4: Seed Bootstrap Images (AUTO-RUN)
+The bootstrapping process **automatically seeds** all Kubernetes bootstrap images (etcd, kube-apiserver, kubelet, etc.) to the local registry at `192.168.122.1:5000` before OpenTofu applies. This enables true offline bootstrap capability.
+
+#### Step 3.5: Provision VMs & Deploy Platform
 ```bash
 bash provisioning/dev/scripts/startup.sh
 ```
 *Verification during run:* Watch the live progress table. Each step is validated immediately and will fail-fast if checks deviate.
+
+#### Offline-First Architecture
+
+The platform operates in **offline-first mode by default** (`OFFLINE_MODE=true`). This means:
+
+1. **Bootstrap images pre-seeded** - All Kubernetes control plane images (etcd, kube-apiserver, kube-controller-manager, kube-scheduler, kubelet) are cached locally
+2. **Registry mirrors configured** - Containerd is configured to redirect `registry.k8s.io` and `ghcr.io` pulls to the local registry
+3. **No internet dependency** - The cluster can bootstrap complete without any outbound connectivity
+
+To temporarily use internet access instead, set `OFFLINE_MODE=false` in `.env` before running `startup.sh`.
+
+##### Pre-Bootstrap Caching Requirements
+
+For reliable offline bootstrap, ensure these components are pre-seeded:
+
+**1. Talos ISO Image:**
+```bash
+# Download Talos install ISO (required for first-boot installation)
+sudo mkdir -p /var/lib/libvirt/images
+curl -L -o /var/lib/libvirt/images/talos-install.iso \
+  "https://factory.talos.dev/image/<schematic-id>/v1.13.5/metal-amd64.iso"
+```
+
+**2. Talos Cache Image:**
+```bash
+# The cached Talos base image (used for all VMs)
+# This should be in the .cache directory
+ls -la /home/cores/Documents/Projects/Study/HPA/with-gsd/.cache/talos-*.qcow2
+```
+
+**3. Bootstrap Images in Local Registry:**
+```bash
+# Verify registry has all required images
+curl -s http://192.168.122.1:5000/v2/_catalog
+# Expected: etcd, kube-apiserver, kube-controller-manager, kube-scheduler, kubelet
+```
+
+##### Cache Handling
+
+The bootstrap process handles caching intelligently:
+
+- **Talos ISO**: Preserved if exists on disk - only re-downloaded if missing
+- **Cache Image**: The source file at `.cache/talos-*.qcow2` is never deleted. If a stale volume exists, it's removed so tofu can recreate from the cache
+- **Bootstrap Images**: Only pushed if digest differs (comparison via registry API)
 
 ### 4. Verifying Core Cluster State
 
@@ -133,14 +186,17 @@ This guide walks through the complete bootstrap of a 4-node Talos Kubernetes dev
 | Step | Task | Script |
 |------|------|--------|
 | 1 | Provision Talos VMs | `tofu apply` |
-| 2 | Setup hpa-bridge | `setup-bridge.sh` |
-| 3 | Install Cilium CNI | `install-cilium.sh` |
-| 4 | Install Rook Ceph | `install-rook-ceph.sh` |
-| 5 | Install Harbor/Infisical | `install-harbor.sh`, `install-infisical.sh` |
-| 6 | Install Runtimes | `install-runtimes.sh` |
-| 7 | Install Envoy Gateway | `install-gateway.sh` |
-| 8 | Install GitOps Pipeline | `install-gitops.sh` |
-| 9 | Deploy Workloads | `install-workloads.sh` |
+| 2 | Setup hpa-bridge network | `setup-bridge.sh` |
+| 3 | Seed bootstrap images to local registry | `bootstrap-harbor.sh` (auto-run) |
+| 4 | Install Cilium CNI | `install-cilium.sh` |
+| 5 | Install Rook Ceph | `install-rook-ceph.sh` |
+| 6 | Install Harbor/Infisical | `install-harbor.sh`, `install-infisical.sh` |
+| 7 | Install Runtimes | `install-runtimes.sh` |
+| 8 | Install Envoy Gateway | `install-gateway.sh` |
+| 9 | Install GitOps Pipeline | `install-gitops.sh` |
+| 10 | Deploy Workloads | `install-workloads.sh` |
+
+**Note:** Step 3 (Seeding) runs automatically before tofu apply in offline mode. The `OFFLINE_MODE=true` is the default in `.env.example`.
 
 ### Verification Scripts
 
@@ -741,6 +797,68 @@ The project uses GitLab CI for automated testing and validation. The pipeline in
 5. **k8s-validate**: Validates Kubernetes manifest syntax
 6. **secret-scan**: Scans for potential hardcoded secrets
 7. **dry-verify**: Verifies DRY compliance across the codebase
+
+---
+
+## 🚨 Troubleshooting
+
+### Startup Script Shows "kubeconfig already exists — skipping tofu apply"
+
+This occurs when:
+1. A previous kubeconfig file exists but the cluster is not healthy
+2. The cleanup script removed VMs but kubeconfig was not cleaned up
+
+**Solution:**
+```bash
+# Remove stale kubeconfig before running fresh bootstrap
+rm -f provisioning/dev/opentofu/kubeconfig
+bash provisioning/dev/scripts/startup.sh
+```
+
+### No VMs are Created During Bootstrap
+
+Check these common issues:
+
+1. **Talos ISO not available:**
+   ```bash
+   ls -la /var/lib/libvirt/images/talos-install.iso
+   ```
+   Download if missing: `curl -L -o /var/lib/libvirt/images/talos-install.iso "https://factory.talos.dev/image/<schematic-id>/v1.13.5/metal-amd64.iso"`
+
+2. **Base image not cached:**
+   ```bash
+   ls -la /home/cores/Documents/Projects/Study/HPA/with-gsd/.cache/talos-*.qcow2
+   ```
+
+3. **Libvirt daemon issues:**
+   ```bash
+   virsh -c qemu:///system list
+   sudo systemctl status libvirtd
+   ```
+
+### Registry Images Not Being Used
+
+Verify the local registry has all bootstrap images:
+
+```bash
+# Check catalog
+curl -s http://192.168.122.1:5000/v2/_catalog
+
+# Seed images manually if needed
+bash provisioning/dev/scripts/bootstrap-harbor.sh --host
+```
+
+### Offline Mode Not Working
+
+If the cluster tries to pull images from the internet:
+
+1. Verify `OFFLINE_MODE=true` in `.env`
+2. Check containerd mirror configuration in Talos machine config
+3. Verify registry is accessible from VMs
+
+---
+
+## 🔐 Security
 
 ### Protected Branches
 

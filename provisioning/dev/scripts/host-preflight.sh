@@ -368,7 +368,11 @@ if [ "${REQUIRE_TOOLS_ONLY}" != true ]; then
         esac
 
         # Check if the variable or its TF_VAR_ form is set
-        if [ -z "${!VAR_NAME:-}" ] && [ -z "${!TF_VAR_${VAR_NAME}:-}" ]; then
+        # Get the value of ${VAR_NAME} and ${TF_VAR_${VAR_NAME}}
+        VAL_DIRECT="${!VAR_NAME:-}"
+        TF_VAR_NAME="TF_VAR_${VAR_NAME}"
+        VAL_TF_VAR="${!TF_VAR_NAME:-}"
+        if [ -z "${VAL_DIRECT}" ] && [ -z "${VAL_TF_VAR}" ]; then
           # Check for placeholder value
           val="${!VAR_NAME:-}"
           if echo "${val}" | grep -qi "change-me\|your-"; then
