@@ -16,34 +16,35 @@ provisioning/dev/scripts/
 ├── misc/                   # Supporting scripts (environment setup, cleanup, etc.)
 │   ├── preamble.sh         # Shared bootstrapping functions
 │   ├── env-common.sh       # Centralized environment variables
+│   ├── host-preflight.sh   # Host preflight validation
 │   ├── cleanup*.sh         # Cleanup and preflight scripts
 │   ├── run-pipeline.sh     # Resilient pipeline runner
 │   └── verify-*.sh         # Verification scripts
 └── steps/                  # Pipeline step folders (numbered by execution order)
     ├── step-01-bridge-setup/
     ├── step-02-cilium/
-    ├── step-03-harbor/
-    ├── step-04-infisical/
-    ├── step-05-runtimes/
-    ├── step-06-kafka/
-    ├── step-07-spegel/
-    ├── step-08-casdoor/
-    ├── step-09-casbin/
-    ├── step-10-gateway/
-    ├── step-11-security-policy/
-    ├── step-12-gitops/
-    ├── step-13-workloads/
-    ├── step-14-streaming-workload/
-    ├── step-15-infisical-workloads/
-    ├── step-16-yugabytedb/
-    ├── step-17-hasura/
-    ├── step-18-vm-single/
-    ├── step-19-vmagent/
-    ├── step-20-kube-state-metrics/
-    ├── step-21-grafana/
-    ├── step-22-alertmanager/
-    ├── step-23-tls/
-    ├── step-24-couchdb/
+    ├── step-03-rook-ceph/
+    ├── step-04-harbor/
+    ├── step-05-infisical/
+    ├── step-06-runtimes/
+    ├── step-07-kafka/
+    ├── step-08-spegel/
+    ├── step-09-casdoor/
+    ├── step-10-casbin/
+    ├── step-11-gateway/
+    ├── step-12-security-policy/
+    ├── step-13-gitops/
+    ├── step-14-workloads/
+    ├── step-15-workload-streaming/
+    ├── step-16-infisical/
+    ├── step-17-yugabytedb/
+    ├── step-18-hasura/
+    ├── step-19-metrics/
+    ├── step-20-vmagent/
+    ├── step-21-kube-state-metrics/
+    ├── step-22-grafana/
+    ├── step-23-alertmanager/
+    ├── step-24-tls/
     └── step-25-seed-hydration/
 ```
 
@@ -107,7 +108,7 @@ All operations are automated using shell scripts in `provisioning/dev/scripts/`.
 #### Step 3.1: Run Host Pre-flight Audits
 Validate that your hypervisor, groups, and virtualization limits are compliant:
 ```bash
-bash provisioning/dev/scripts/host-preflight.sh
+bash provisioning/dev/scripts/misc/host-preflight.sh
 ```
 
 #### Step 3.2: Recreate the Host Bridge Network
