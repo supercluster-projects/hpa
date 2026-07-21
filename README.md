@@ -191,6 +191,61 @@ bash provisioning/dev/scripts/verify-cilium.sh --kubeconfig provisioning/dev/ope
 
 ---
 
+### Interactive Bootstrapping
+
+The `startup.sh` script now supports **interactive mode** where you can control which steps execute:
+
+```bash
+./provisioning/dev/scripts/startup.sh
+```
+
+After each step completes, you'll see:
+
+```
+========================================
+Step 0: Setup hpa-bridge network
+  Status: DONE
+========================================
+
+>>> Verification Results:
+     Network is active
+
+========================================
+  OPTIONS:
+    E/e  - Execute next step
+    S/s  - Skip next step
+    R/r  - View recent results table
+    Q/q  - Quit script
+========================================
+Choose (E Execute/S Skip/R Results/Q Quit): 
+```
+
+**Step Execution Flow:**
+1. **Steps 0-1** (Bridge setup and verification) run automatically - they're required
+2. **Step 2** (OpenTofu provisioning) prompts before starting - it can take 30-60 minutes
+3. **Subsequent steps** prompt after each completion with results
+
+**Results Table:**
+Press `R` at any prompt to view the step results summary:
+```
+  Step | Name                              | Status  | Details
+  -----|-----------------------------------|---------|-------
+  Install Cilium CNI                    | SUCCESS | pods healthy
+  Install Rook Ceph                     | SUCCESS | 3 OSDs ready
+  ...
+```
+
+### Non-Interactive Mode
+
+For automated environments (CI/CD), use batch mode:
+
+```bash
+# Run with auto-confirm (all steps execute)
+yes | ./provisioning/dev/scripts/startup.sh
+```
+
+---
+
 ## ⚡ Quickstart Guide
 
 This guide walks through the complete bootstrap of a 4-node Talos Kubernetes dev cluster on KVM/libvirt.
