@@ -75,3 +75,5 @@ tmp/
 
 # ── GSD baseline (auto-generated) ──
 .env.*
+provisioning/dev/opentofu/kubeconfig
+provisioning/dev/opentofu/talosconfig
