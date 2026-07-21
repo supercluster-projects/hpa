@@ -114,7 +114,7 @@ bash provisioning/dev/scripts/misc/host-preflight.sh
 #### Step 3.2: Recreate the Host Bridge Network
 To guarantee deterministic static DHCP leases:
 ```bash
-bash provisioning/dev/scripts/setup-bridge.sh
+bash provisioning/dev/scripts/steps/step-01-bridge-setup/setup-bridge.sh
 ```
 
 #### Step 3.3: Pre-Cache Talos OS Images
