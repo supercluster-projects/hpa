@@ -22,16 +22,19 @@
 set -euo pipefail
 
 # SCRIPT_DIR is the directory containing the calling script (via BASH_SOURCE)
-# When sourced by startup.sh (in scripts/), SCRIPT_DIR should be scripts/
-# When sourced by misc/ or steps/, SCRIPT_DIR should be misc/ or steps/xxx/
-PARENT_SCRIPT="${BASH_SOURCE[1]:-}"
-if [[ "$PARENT_SCRIPT" == startup.sh ]]; then
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
+# BASH_SOURCE[0] is always the preamble.sh file (in misc/)
+# BASH_SOURCE[1] is the calling script
+_PREAMBLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Check if we're being sourced by startup.sh
+if [[ "$(basename "${BASH_SOURCE[1]:-}")" == "startup.sh" ]]; then
+  # Sourced by startup.sh - SCRIPT_DIR is the parent of misc/ (scripts/)
+  SCRIPT_DIR="$(cd "${_PREAMBLE_DIR}/.." && pwd)"
 else
-  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  # Sourced from misc/ or steps/ - SCRIPT_DIR is preamble's directory
+  SCRIPT_DIR="${_PREAMBLE_DIR}"
 fi
 
-# PROJECT_ROOT is the project root
 # Directory structure: project_root/provisioning/dev/scripts/{misc,steps/step-XX/}
 # From misc: misc -> scripts -> dev -> provisioning -> project_root (4 levels up)
 # From steps: steps/step-XX -> steps -> scripts -> dev -> provisioning -> project_root (5 levels up)
