@@ -27,10 +27,10 @@
 #                            [--require-tools-only]
 #                            [--help]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
 
 # ---- Internal defaults (script-internal only) -------------------------
-TOFU_DIR="${SCRIPT_DIR}/../opentofu"
+TOFU_DIR="${SCRIPT_DIR}/../../opentofu"
 CACHE_DIR="${DEV_CACHE_DIR:-${PROJECT_ROOT}/.cache}"
 ENV_FILE="${PROJECT_ROOT}/.env"
 REQUIRE_TOOLS_ONLY=false
