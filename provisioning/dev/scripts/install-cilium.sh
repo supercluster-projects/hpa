@@ -25,7 +25,7 @@ require_env DEV_CLUSTER_NAME
 # ---- Internal defaults (script-internal only) -------------------------
 CLUSTER_NAME="${DEV_CLUSTER_NAME}"
 LB_POOL_CIDR="${DEV_LB_POOL_CIDR}"
-WAIT_TIMEOUT=900
+WAIT_TIMEOUT=1800
 HELM_RELEASE_NAME="cilium"
 HELM_NAMESPACE="kube-system"
 
@@ -83,23 +83,18 @@ log "  Cilium Helm repo: READY"
 # ---- Step 2: Install/upgrade Cilium via Helm ------------------------------
 log "Step 2: Installing/upgrading Cilium via Helm (version ${CILIUM_VERSION})"
 
-# Extract dynamic Kubernetes API server IP and port from Kubeconfig for Kube-Proxy-Free routing
-API_SERVER_URL=$(kubectl config view --minify -o jsonpath='{.clusters[0].cluster.server}')
-API_SERVER_IP=$(echo "${API_SERVER_URL}" | sed -e 's|https://||' -e 's|:.*||')
-API_SERVER_PORT=$(echo "${API_SERVER_URL}" | sed -e 's|.*:||')
-
-log "  Configuring Cilium with Kube-Proxy-Free routing to API server ${API_SERVER_IP}:${API_SERVER_PORT}"
+# Use KubePrism on localhost:7445 for kube-proxy replacement on Talos
+# (Talos enables KubePrism at 7445 by default — avoids API server reachability issues)
+log "  Configuring Cilium with Kube-Proxy-Free routing via KubePrism (localhost:7445)"
 
 helm upgrade --install "${HELM_RELEASE_NAME}" cilium/cilium \
   --namespace "${HELM_NAMESPACE}" \
   --version "${CILIUM_VERSION}" \
-  --atomic \
-  --wait \
   --timeout "${WAIT_TIMEOUT}s" \
   --set "cluster.name=${CLUSTER_NAME}" \
   --set "kubeProxyReplacement=true" \
-  --set "k8sServiceHost=${API_SERVER_IP}" \
-  --set "k8sServicePort=${API_SERVER_PORT}" \
+  --set "k8sServiceHost=localhost" \
+  --set "k8sServicePort=7445" \
   --set "l2announcements.enabled=true" \
   --set "externalIPs.enabled=true" \
   --set "ipam.mode=cluster-pool" \

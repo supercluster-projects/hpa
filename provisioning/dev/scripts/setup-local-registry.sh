@@ -58,12 +58,12 @@ start_registry() {
   # Remove existing registry if present
   docker rm -f "${REGISTRY_NAME}" 2>/dev/null || true
 
-  # Start registry
+  # Start registry (:z suffix for SELinux relabeling)
   docker run -d \
     --name "${REGISTRY_NAME}" \
     --restart unless-stopped \
     -p "${REGISTRY_PORT}:5000" \
-    -v "${SCRIPT_DIR}/registry-data:/var/lib/registry" \
+    -v "${SCRIPT_DIR}/registry-data:/var/lib/registry:z" \
     registry:2
 
   # Wait for registry to be ready
@@ -82,17 +82,26 @@ start_registry() {
 # ---- Function to pull and push images --------------------------------------
 sync_image() {
   local image="$1"
-  local local_tag="${image/registry.k8s.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
-  local_tag="${local_tag/ghcr.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+  local img_name="${image#*/}"
+  local img_name="${img_name//\//-}"
 
   log "Syncing ${image}..."
 
-  # Pull from upstream (skip if offline and image not in seed)
-  if docker pull "${image}" 2>/dev/null; then
-    # Tag for local registry
-    docker tag "${image}" "${local_tag}"
+  # Use skopeo for multi-arch image support (docker push fails on multi-arch)
+  if command -v skopeo >/dev/null 2>&1; then
+    log "  Using skopeo (multi-arch safe)..."
+    skopeo copy --dest-tls-verify=false "docker://${image}" "docker://${REGISTRY_HOST}:${REGISTRY_PORT}/${image#*/}" 2>&1 && {
+      log "  ✓ ${image} seeded via skopeo"
+      return 0
+    }
+    log "  Warning: skopeo failed, trying docker pull/tag/push..."
+  fi
 
-    # Push to local registry
+  # Fallback: Pull from upstream, tag, push via docker
+  if docker pull "${image}" 2>/dev/null; then
+    local local_tag="${image/registry.k8s.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+    local_tag="${local_tag/ghcr.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+    docker tag "${image}" "${local_tag}"
     docker push "${local_tag}" 2>/dev/null || log "Warning: Could not push ${local_tag}"
   else
     log "Warning: Could not pull ${image} - may already be in seed or offline"

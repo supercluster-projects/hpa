@@ -1,0 +1,14 @@
+DEV_TALOS_IMAGE_FACTORY_URL = "http://192.168.122.1:5000"
+DEV_CLUSTER_NAME            = "hpa-dev"
+DEV_CIDR_BLOCK              = "192.168.122.0/24"
+DEV_GATEWAY_IP              = "192.168.122.1"
+DEV_BRIDGE_NAME             = "hpa-bridge"
+DEV_CP_COUNT                = 1
+DEV_WORKER_COUNT            = 3
+DEV_VM_CPU                  = 2
+DEV_CP_RAM_MB               = 4096
+DEV_WORKER_RAM_MB           = 4096
+DEV_OS_DISK_SIZE_GB         = 20
+DEV_CEPH_DISK_SIZE_GB       = 20
+local_image_path            = "/home/cores/Documents/Projects/Study/HPA/with-gsd/prebuilt-images/talos-base-20gb.qcow2"
+DEV_LOCAL_REGISTRY          = "/home/cores/Documents/Projects/Study/HPA/with-gsd/provisioning/dev/scripts/setup-local-registry.sh"

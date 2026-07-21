@@ -126,12 +126,6 @@ bash "${SCRIPT_DIR}/setup-bridge.sh" && STEP_END "DONE" || {
   die "setup-bridge.sh failed"
 }
 
-# ---- Pre-flight cleanup (runs after bridge setup) -------------------------
-log "Running pre-flight cleanup..."
-bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR:-${SCRIPT_DIR}/../opentofu}" 2>&1 || {
-  log "Pre-flight cleanup had minor issues — continuing anyway."
-}
-
 # ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
 # Check if cluster is already healthy and accessible via existing kubeconfig
 CLUSTER_HEALTHY=false
@@ -164,6 +158,12 @@ if [ "${SKIP_TOFU}" = false ] && [ "${CLUSTER_HEALTHY}" = false ]; then
   if ! virsh -c qemu:///system list >/dev/null 2>&1; then
     die "libvirtd is not reachable via 'virsh list'. Ensure libvirtd is running and the current user is in the libvirt group."
   fi
+
+  # Pre-flight cleanup (only runs when tofu apply is about to execute)
+  log "Running pre-flight cleanup..."
+  bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" 2>&1 || {
+    log "Pre-flight cleanup had minor issues — continuing anyway."
+  }
 
   log "Running tofu apply -auto-approve..."
 
@@ -228,6 +228,16 @@ if [ "${SKIP_TOFU}" = false ] && [ "${CLUSTER_HEALTHY}" = false ]; then
     log "Seeding bootstrap images to local registry..."
     bash "${SCRIPT_DIR}/bootstrap-harbor.sh" --host || die "bootstrap-harbor.sh failed"
     STEP_END "DONE"
+  fi
+
+  # Setup local dev overlay registry
+  STEP_START "Setup Local Dev Overlay Registry"
+  if [ -n "${DEV_LOCAL_REGISTRY:-}" ]; then
+    log "Using DEV_LOCAL_REGISTRY overlay: ${DEV_LOCAL_REGISTRY}"
+    bash "${DEV_LOCAL_REGISTRY}" || die "DEV_LOCAL_REGISTRY overlay setup failed"
+    STEP_END "DONE"
+  else
+    STEP_END "SKIPPED (DEV_LOCAL_REGISTRY not set)"
   fi
 
   # Start real-time bootstrap monitor in background.

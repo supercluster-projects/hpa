@@ -13,6 +13,8 @@ machine:
   sysctls:
     net.ipv4.conf.all.rp_filter: "0"
     net.ipv4.conf.default.rp_filter: "0"
+    net.core/*: "0"
+    net.ipv4.*: "0"
   env:
     # Proxy settings - values interpolated from Terraform locals
     # Proxy disabled to allow direct internet access for image pulls
@@ -43,6 +45,12 @@ machine:
         endpoints:
           - http://${gateway}:5000
       ghcr.io:
+        endpoints:
+          - http://${gateway}:5000
+      quay.io:
+        endpoints:
+          - http://${gateway}:5000
+      docker.io:
         endpoints:
           - http://${gateway}:5000
 

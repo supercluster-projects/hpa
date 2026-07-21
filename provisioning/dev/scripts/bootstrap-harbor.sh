@@ -83,17 +83,26 @@ if [ "${MODE}" = "--host" ]; then
       continue
     fi
     
-    # Tag and push
-    log "  Tagging as ${REGISTRY_TAG}..."
-    if docker tag "$img" "$REGISTRY_TAG" 2>/dev/null; then
-      log "  Pushing to registry..."
-      if docker push "$REGISTRY_TAG" 2>&1 | grep -q "Pushed\|uploaded"; then
-        log "  ✓ ${img} seeded successfully"
+    # Tag and push (use skopeo for multi-arch images, docker push for single-arch)
+    log "  Pushing to registry..."
+    if command -v skopeo >/dev/null 2>&1; then
+      log "  Using skopeo (multi-arch safe)..."
+      if skopeo copy --dest-tls-verify=false "docker://${img}" "docker://${REGISTRY_URL}/${IMG_NAME}" 2>&1 | grep -q "Writing manifest"; then
+        log "  ✓ ${img} seeded successfully via skopeo"
       else
-        log "  Note: Push may have issues (image cached)"
+        log "  Note: skopeo push may have issues (image cached or unavailable)"
       fi
     else
-      log "  Note: Tag may already exist (image cached)"
+      log "  Tagging as ${REGISTRY_TAG}..."
+      if docker tag "$img" "$REGISTRY_TAG" 2>/dev/null; then
+        if docker push "$REGISTRY_TAG" 2>&1 | grep -q "Pushed\|uploaded"; then
+          log "  ✓ ${img} seeded successfully"
+        else
+          log "  Note: Push may have issues (image cached)"
+        fi
+      else
+        log "  Note: Tag may already exist (image cached)"
+      fi
     fi
   done
   

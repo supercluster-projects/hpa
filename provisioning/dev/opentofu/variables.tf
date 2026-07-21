@@ -89,12 +89,12 @@ variable "DEV_BRIDGE_NAME" {
 }
 
 variable "TALOS_VERSION" {
-  description = "Talos version to install (e.g. v1.13.5)"
+  description = "Talos version to install (e.g. v1.13.6)"
   type        = string
 
   validation {
     condition     = can(regex("^v\\d+\\.\\d+\\.\\d+", var.TALOS_VERSION))
-    error_message = "TALOS_VERSION must start with 'v' followed by semver (e.g. v1.13.5)."
+    error_message = "TALOS_VERSION must start with 'v' followed by semver (e.g. v1.13.6)."
   }
 }
 
@@ -138,4 +138,10 @@ variable "prebuilt_images_dir" {
   description = "Path to the pre-built raw disk images"
   type        = string
   default     = "/home/cores/Documents/Projects/Study/HPA/with-gsd/prebuilt-images"
+}
+
+variable "DEV_LOCAL_REGISTRY" {
+  description = "Path to the local dev overlay registry configuration"
+  type        = string
+  default     = ""
 }
