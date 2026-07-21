@@ -47,12 +47,24 @@ else
   PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
 fi
 
-KUBECONFIG="${KUBECONFIG:-${SCRIPT_DIR}/../opentofu/kubeconfig}"
+KUBECONFIG="${KUBECONFIG:-${PROJECT_ROOT}/provisioning/dev/opentofu/kubeconfig}"
+STARTUP_LOG="${PROJECT_ROOT}/provisioning/dev/startup.log"
 START_TIME=$(date +%s)
 
-# ---- Log helpers: go through tee to startup.log only (fd 1/2 tee) -------------
+# ---- Log setup: capture all output to startup.log at project root --------
+# Save fd 3 to the raw terminal BEFORE the tee redirect, so that the
+# bootstrap monitor and progress table can write updating lines that
+# overwrite each other on screen without accumulating in startup.log.
+exec 3>&2
+
+# Clear the log file at the start of each run so stale output is not confusing.
+: > "${STARTUP_LOG}" 2>/dev/null || true
+exec > >(tee -a "${STARTUP_LOG}" 2>/dev/null) 2>&1 || exec > /dev/null
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
+
+# ---- Log helpers ----------------------------------------------------------
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
-log_step() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${PROJECT_ROOT}/startup.log" 2>/dev/null || true; }
+log_step() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${STARTUP_LOG}" 2>/dev/null || true; }
 err()  { log "ERROR: $*"; }
 die()  {
   local msg="$*"
@@ -161,4 +173,4 @@ fi
 command -v kubectl >/dev/null 2>&1 || log "  Warning: kubectl not found in PATH"
 command -v helm >/dev/null 2>&1 || log "  Warning: helm not found in PATH"
 
-export KUBECONFIG PROJECT_ROOT CIDR_BASE CIDR_BLOCK GATEWAY_IP CONTROL_PLANE_IP
+export KUBECONFIG PROJECT_ROOT CIDR_BASE CIDR_BLOCK GATEWAY_IP CONTROL_PLANE_IP STARTUP_LOG
