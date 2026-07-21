@@ -81,6 +81,8 @@ Options:
   --tofu-dir DIR      OpenTofu directory (default: ../opentofu)
   --kubeconfig PATH   Path to kubeconfig (default: ../opentofu/kubeconfig)
   --envoy-ip IP       Envoy LB IP for endpoint verification
+  --preserve-ceph     Preserve Ceph disks across cluster runs (default: true)
+  --reset-ceph        Clear Ceph disks before provisioning
   --help, -h          Show this help message
 
 Interactive mode: After each step completes, you will be prompted to:
