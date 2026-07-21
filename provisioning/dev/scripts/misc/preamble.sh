@@ -22,7 +22,14 @@
 set -euo pipefail
 
 # SCRIPT_DIR is the directory containing the calling script (via BASH_SOURCE)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# When sourced by startup.sh (in scripts/), SCRIPT_DIR should be scripts/
+# When sourced by misc/ or steps/, SCRIPT_DIR should be misc/ or steps/xxx/
+PARENT_SCRIPT="${BASH_SOURCE[1]:-}"
+if [[ "$PARENT_SCRIPT" == startup.sh ]]; then
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/.."
+else
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 # PROJECT_ROOT is the project root
 # Directory structure: project_root/provisioning/dev/scripts/{misc,steps/step-XX/}
