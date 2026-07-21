@@ -105,32 +105,32 @@ Ensure your host machine has the following packages pre-installed:
 
 All operations are automated using shell scripts in `provisioning/dev/scripts/`.
 
-#### Step 3.1: Run Host Pre-flight Audits
+#### Step 0: Run Host Pre-flight Audits
 Validate that your hypervisor, groups, and virtualization limits are compliant:
 ```bash
 bash provisioning/dev/scripts/misc/host-preflight.sh
 ```
 
-#### Step 3.2: Recreate the Host Bridge Network
-To guarantee deterministic static DHCP leases:
+#### Step 1: Setup hpa-bridge Network
+Create the libvirt bridge network for VM communication:
 ```bash
 bash provisioning/dev/scripts/steps/step-01-bridge-setup/setup-bridge.sh
 ```
 
-#### Step 3.3: Pre-Cache Talos OS Images
-Download and pre-stage the cached Talos OS `qcow2` image:
-```bash
-bash provisioning/dev/scripts/prep-cache.sh
-```
-
-#### Step 3.4: Seed Bootstrap Images (AUTO-RUN)
-The bootstrapping process **automatically seeds** all Kubernetes bootstrap images (etcd, kube-apiserver, kubelet, etc.) to the local registry at `192.168.122.1:5000` before OpenTofu applies. This enables true offline bootstrap capability.
-
-#### Step 3.5: Provision VMs & Deploy Platform
+#### Step 2: Provision Talos VMs (OpenTofu Apply)
+This is the longest step (~30-60 minutes). The startup script will prompt before starting:
 ```bash
 bash provisioning/dev/scripts/startup.sh
 ```
 *Verification during run:* Watch the live progress table. Each step is validated immediately and will fail-fast if checks deviate.
+
+#### Optional: Pre-cache Talos OS Images
+If running in offline-first mode, pre-download the Talos OS cache image:
+```bash
+bash provisioning/dev/scripts/prep-cache.sh
+```
+
+**Note:** Bootstrap images are seeded automatically before VM provisioning if `OFFLINE_MODE=true`.
 
 #### Offline-First Architecture
 
@@ -276,30 +276,29 @@ This guide walks through the complete bootstrap of a 4-node Talos Kubernetes dev
    # Edit .env - set GITOPS_REPO_URL
    ```
 
-3. Provision OpenTofu infrastructure:
+3. Run host preflight:
    ```bash
-   cd provisioning/dev/opentofu
-   tofu init
-   tofu plan
-   tofu apply -auto-approve
+   bash provisioning/dev/scripts/misc/host-preflight.sh
    ```
 
 ### Bootstrap Steps
 
-| Step | Task | Script |
-|------|------|--------|
-| 1 | Provision Talos VMs | `tofu apply` |
-| 2 | Setup hpa-bridge network | `setup-bridge.sh` |
-| 3 | Seed bootstrap images to local registry | `bootstrap-harbor.sh` (auto-run) |
-| 4 | Install Cilium CNI | `install-cilium.sh` |
-| 5 | Install Rook Ceph | `install-rook-ceph.sh` |
-| 6 | Install Harbor/Infisical | `install-harbor.sh`, `install-infisical.sh` |
-| 7 | Install Runtimes | `install-runtimes.sh` |
-| 8 | Install Envoy Gateway | `install-gateway.sh` |
-| 9 | Install GitOps Pipeline | `install-gitops.sh` |
-| 10 | Deploy Workloads | `install-workloads.sh` |
+| Step | Task | Script | Notes |
+|------|------|--------|-------|
+| 0 | Run Host Pre-flight | `host-preflight.sh` | Validates host readiness |
+| 1 | Setup hpa-bridge network | `setup-bridge.sh` | Creates libvirt bridge |
+| 2 | Provision Talos VMs | `startup.sh` → `tofu apply` | ~30-60 min, prompts before start |
+| 2+| Seed bootstrap images | `bootstrap-harbor.sh` | Auto-runs before step 2 |
+| 3 | Install Cilium CNI | `install-cilium.sh` | eBPF networking |
+| 4 | Install Rook Ceph | `install-rook-ceph.sh` | Storage |
+| 5 | Install Harbor | `install-harbor.sh` | Registry |
+| 6 | Install Infisical | `install-infisical.sh` | Secrets |
+| 7 | Install Runtimes | `install-runtimes.sh` | Knative, cert-manager |
+| 8 | Install Envoy Gateway | `install-gateway.sh` | Ingress |
+| 9 | Install GitOps Pipeline | `install-gitops.sh` | ArgoCD, Kargo |
+| 10 | Deploy Workloads | `install-workloads.sh` | Welcome, Counter apps |
 
-**Note:** Step 3 (Seeding) runs automatically before tofu apply in offline mode. The `OFFLINE_MODE=true` is the default in `.env.example`.
+**Note:** The `startup.sh` script provides an **interactive UI** for controlling step execution. Use `E` to execute, `S` to skip, `R` for results, or `Q` to quit.
 
 ### Verification Scripts
 
