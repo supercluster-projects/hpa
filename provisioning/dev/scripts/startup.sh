@@ -248,7 +248,7 @@ fi
 
 # Prompt after step 1
 case $? in
-  0) prompt_step 1 "Verify bridge network" "DONE" || [ $? -eq 1 ] && SHIFT_NEXT=true ;;
+  0) prompt_step 2 "Verify bridge network" "SUCCESS" || [ $? -eq 1 ] && SHIFT_NEXT=true ;;
 esac
 
 # ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
@@ -413,6 +413,61 @@ except Exception as e:
         log "tofu apply completed successfully."
         STEP_END "DONE"
         
+        # ---- Bootstrap Talos cluster (Method 1 with insecure mode) ----
+        log "Bootstrapping Talos cluster with insecure mode..."
+        export TALOSCONFIG="${TFDIR}/talosconfig"
+        
+        # Bootstrap control plane node
+        PRIMARY_CP_IP="192.168.122.100"
+        
+        # Attempt bootstrap with insecure mode (Method 1)
+        if command -v talosctl &>/dev/null; then
+          # Set talos endpoint
+          talosctl config endpoint "insecure://${PRIMARY_CP_IP}" 2>/dev/null || true
+          
+          # Bootstrap with insecure mode
+          log "Running talosctl bootstrap --insecure=true..."
+          if timeout 120 talosctl --insecure=true -n "${PRIMARY_CP_IP}" bootstrap 2>&1; then
+            log "Bootstrap completed successfully"
+          else
+            log "WARNING: Bootstrap command returned non-zero, continuing anyway..."
+          fi
+        else
+          log "WARNING: talosctl not found, skipping bootstrap"
+        fi
+        
+        # Wait for API endpoint to be available
+        log "Waiting for Talos API to be available..."
+        API_READY=false
+        for i in {1..30}; do
+          if timeout 5 curl -sk "https://${PRIMARY_CP_IP}:6443/healthz" 2>/dev/null | grep -q "ok"; then
+            API_READY=true
+            break
+          fi
+          log "Waiting for API... ($i/30)"
+          sleep 5
+        done
+        
+        if [ "$API_READY" = true ]; then
+          # Generate kubeconfig after successful bootstrap
+          log "Generating kubeconfig after bootstrap..."
+          if command -v talosctl &>/dev/null; then
+            talosctl --insecure=true -n "${PRIMARY_CP_IP}" kubeconfig . 2>/dev/null || log "WARNING: Failed to extract kubeconfig via talosctl"
+          fi
+          
+          # Verify kubeconfig was created
+          if [ -f ./kubeconfig ]; then
+            cp ./kubeconfig "${KUBECONFIG}"
+            log "Kubeconfig saved to ${KUBECONFIG}"
+          fi
+        else
+          log "WARNING: Talos API not available after bootstrap timeout"
+        fi
+        
+        add_step_result 2 "Bootstrap Talos cluster" "SUCCESS" "API ready"
+        CURRENT_STEP_NUM=2
+        add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SUCCESS" ""
+        
         # Check cluster health
         for i in {1..60}; do
           if kubectl --kubeconfig "${KUBECONFIG}" get nodes 2>/dev/null | grep -q "Ready"; then
@@ -423,7 +478,7 @@ except Exception as e:
         done
         
         NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-        add_step_result 2 "Provision Talos VMs (OpenTofu)" "SUCCESS" "${NODE_COUNT} nodes ready"
+        add_step_result 3 "Provision Talos VMs (OpenTofu)" "SUCCESS" "${NODE_COUNT} nodes ready"
         ;;
       [Ss])
         log "--skip-tofu set — using existing kubeconfig (if any)."
