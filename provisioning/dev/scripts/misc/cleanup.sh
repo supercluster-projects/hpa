@@ -18,6 +18,7 @@ set -euo pipefail
 NODE_PREFIX="${NODE_PREFIX:-hpa-node}"
 BRIDGE="${BRIDGE_NAME:-hpa-bridge}"
 TOFU_DIR="${TOFU_DIR:-../opentofu}"
+PRESERVE_CEPH="${PRESERVE_CEPH:-true}"  # Preserve Ceph disks by default
 
 # ---- Parse CLI overrides --------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -25,6 +26,8 @@ while [[ $# -gt 0 ]]; do
     --prefix)  NODE_PREFIX="$2"; shift 2 ;;
     --bridge)  BRIDGE="$2";      shift 2 ;;
     --tofu-dir) TOFU_DIR="$2";  shift 2 ;;
+    --preserve-ceph) PRESERVE_CEPH="true"; shift ;;
+    --reset-ceph)   PRESERVE_CEPH="false"; shift ;;
     *)         echo "[$(date +%H:%M:%S)] ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
@@ -92,12 +95,17 @@ else
   done <<< "${VOL_NAMES}"
 fi
 
-# Cleanly wipe/recreate host-side raw Ceph disk files to prevent metadata inheritance (M5 PSS/OSD fix)
-echo "[$(date +%H:%M:%S)] Cleaving host-side raw Ceph disk images..." >&2
-if sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
-  echo "[$(date +%H:%M:%S)]   Wiped and cleared: /var/lib/libvirt/images/ceph-disks/*.img" >&2
+# Ceph disk handling - preserve by default for idempotent cluster recreation
+echo "[$(date +%H:%M:%S)] Ceph disk handling (PRESERVE_CEPH=${PRESERVE_CEPH})..." >&2
+if [ "${PRESERVE_CEPH}" = "false" ]; then
+  echo "[$(date +%H:%M:%S)] Clearing Ceph disk images..." >&2
+  if sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
+    echo "[$(date +%H:%M:%S)]   Wiped and cleared: /var/lib/libvirt/images/ceph-disks/*.img" >&2
+  else
+    cleanup_fail "sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
+  fi
 else
-  cleanup_fail "sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
+  echo "[$(date +%H:%M:%S)]   Preserving Ceph disk images..." >&2
 fi
 
 # ---- Step 3: Destroy and undefine the hpa-bridge network ------------------

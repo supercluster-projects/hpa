@@ -14,6 +14,8 @@
 #   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected
 #                       if omitted, must be within DEV_LB_POOL_CIDR)
 #   --skip-tofu         Skip OpenTofu provisioning (use existing kubeconfig)
+#   --preserve-ceph     Preserve Ceph disks across runs (default: true)
+#   --reset-ceph        Clear Ceph disks before provisioning
 #   --help, -h          Show this help message
 #
 # Environment:
@@ -55,6 +57,8 @@ fi
 ENVOY_IP=""
 TOFU_DIR="${SCRIPT_DIR}/../opentofu"
 SKIP_TOFU=false
+PRESERVE_CEPH=true
+RESET_CEPH=false
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -62,6 +66,8 @@ while [[ $# -gt 0 ]]; do
     --envoy-ip)    ENVOY_IP="$2";    shift 2 ;;
     --tofu-dir)    TOFU_DIR="$2";    shift 2 ;;
     --skip-tofu)   SKIP_TOFU=true;    shift ;;
+    --preserve-ceph) PRESERVE_CEPH=true; shift ;;
+    --reset-ceph)    RESET_CEPH=true;    shift ;;
     --help|-h)
       cat <<HELP
 Usage: $(basename "$0") [options]
@@ -121,8 +127,17 @@ HELP
   esac
 done
 
-# Export KUBECONFIG for subprocesses
+# Export KUBECONFIG for subprocessures
 export KUBECONFIG
+
+# ---- Pre-flight cleanup ----
+# Run cleanup first before bridge setup (preserves Ceph disks by default)
+CLEANUP_ARGS="--prefix ${DEV_NODE_PREFIX:-hpa-node} --bridge ${DEV_BRIDGE_NAME:-hpa-bridge}"
+if [ "${RESET_CEPH}" = true ]; then
+  CLEANUP_ARGS="${CLEANUP_ARGS} --reset-ceph"
+fi
+log "Running pre-flight cleanup with args: ${CLEANUP_ARGS}..."
+bash "${MISC_DIR}/cleanup.sh" ${CLEANUP_ARGS} 2>&1 || log "Cleanup completed with warnings"
 
 # ---- Result tracking ------------------------------------------------------
 # Track completed steps for review table at the end
