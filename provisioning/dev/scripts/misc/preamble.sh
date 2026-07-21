@@ -35,6 +35,9 @@ else
   SCRIPT_DIR="${_PREAMBLE_DIR}"
 fi
 
+# Common script directories
+MISC_DIR="${SCRIPT_DIR}/misc"
+
 # Directory structure: project_root/provisioning/dev/scripts/{misc,steps/step-XX/}
 # From misc: misc -> scripts -> dev -> provisioning -> project_root (4 levels up)
 # From steps: steps/step-XX -> steps -> scripts -> dev -> provisioning -> project_root (5 levels up)
@@ -74,11 +77,20 @@ STEP_END() {
   local elapsed=$(( $(date +%s) - START_TIME ))
   local mins=$(( elapsed / 60 ))
   local secs=$(( elapsed % 60 ))
-  if [ "${status}" = "DONE" ]; then
-    log "✓ Step ${_STEP_COUNTER} completed in ${mins}m ${secs}s"
-  else
-    log "✗ Step ${_STEP_COUNTER} FAILED: ${detail:-unknown error}"
-  fi
+  case "$status" in
+    DONE)
+      log "✓ Step ${_STEP_COUNTER} completed in ${mins}m ${secs}s"
+      ;;
+    SKIPPED)
+      log "○ Step ${_STEP_COUNTER} skipped${detail:+: ${detail}}"
+      ;;
+    FAIL|FAILED)
+      log "✗ Step ${_STEP_COUNTER} FAILED: ${detail:-unknown error}"
+      ;;
+    *)
+      log "○ Step ${_STEP_COUNTER} ${status}"
+      ;;
+  esac
   log ""
 }
 
