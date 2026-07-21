@@ -78,8 +78,8 @@ Options:
   --help, -h          Show this help message
 
 Pipeline steps:
-  0. OpenTofu apply (4 Talos VMs + kubeconfig)     [skip with --skip-tofu]
-  1. Setup hpa-bridge network
+  0. Setup hpa-bridge network (configure bridge & tap device)
+  1. OpenTofu apply (Provision Talos VMs + kubeconfig)     [skip with --skip-tofu]
   2. Install Cilium CNI
   3. Install Rook Ceph
   4. Install Harbor
@@ -412,7 +412,7 @@ TOTAL_STEPS=26
 STEPS_DIR="${SCRIPT_DIR}/steps"
 MISC_DIR="${SCRIPT_DIR}/misc"
 
-# Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
+# Step 0 (setup-bridge) was already done inline before tofu — idempotent, skip here.
 step 2 "Install Cilium CNI"         "${STEPS_DIR}/step-02-cilium/install-cilium.sh" "${STEPS_DIR}/step-02-cilium/verify-cilium.sh"
 step 3 "Install Rook Ceph"          "${STEPS_DIR}/step-03-rook-ceph/install-rook-ceph.sh" "${STEPS_DIR}/step-03-rook-ceph/verify-ceph.sh"
 step 4 "Install Harbor"             "${STEPS_DIR}/step-04-harbor/install-harbor.sh" "${STEPS_DIR}/step-04-harbor/verify-harbor.sh"
