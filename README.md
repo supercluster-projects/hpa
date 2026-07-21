@@ -6,6 +6,53 @@ A comprehensive DevOps platform implementing **Progressive Delivery with Backsta
 
 ---
 
+## 📁 Script Organization
+
+The provisioning scripts are organized into a structured directory layout:
+
+```
+provisioning/dev/scripts/
+├── startup.sh              # Single entry point for full bootstrap
+├── misc/                   # Supporting scripts (environment setup, cleanup, etc.)
+│   ├── preamble.sh         # Shared bootstrapping functions
+│   ├── env-common.sh       # Centralized environment variables
+│   ├── cleanup*.sh         # Cleanup and preflight scripts
+│   ├── run-pipeline.sh     # Resilient pipeline runner
+│   └── verify-*.sh         # Verification scripts
+└── steps/                  # Pipeline step folders (numbered by execution order)
+    ├── step-01-bridge-setup/
+    ├── step-02-cilium/
+    ├── step-03-harbor/
+    ├── step-04-infisical/
+    ├── step-05-runtimes/
+    ├── step-06-kafka/
+    ├── step-07-spegel/
+    ├── step-08-casdoor/
+    ├── step-09-casbin/
+    ├── step-10-gateway/
+    ├── step-11-security-policy/
+    ├── step-12-gitops/
+    ├── step-13-workloads/
+    ├── step-14-streaming-workload/
+    ├── step-15-infisical-workloads/
+    ├── step-16-yugabytedb/
+    ├── step-17-hasura/
+    ├── step-18-vm-single/
+    ├── step-19-vmagent/
+    ├── step-20-kube-state-metrics/
+    ├── step-21-grafana/
+    ├── step-22-alertmanager/
+    ├── step-23-tls/
+    ├── step-24-couchdb/
+    └── step-25-seed-hydration/
+```
+
+Each step folder contains scripts named by execution order:
+- `01-*-sh` - Primary installation script
+- `02-*-sh` - Verification script (if applicable)
+
+---
+
 ## 📚 Table of Contents
 
 1. [Running and Testing](#running-and-testing)

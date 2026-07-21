@@ -28,7 +28,7 @@
 #
 # All stdout/stderr is also captured to startup.log at project root.
 # ---------------------------------------------------------------------------
-. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/preamble.sh"
+. "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/misc/preamble.sh"
 
 # ---- Log setup: capture all output to startup.log at project root --------
 # Save fd 3 to the raw terminal BEFORE the tee redirect, so that the
@@ -121,7 +121,7 @@ export KUBECONFIG
 
 # ---- Setup bridge network (always runs first, before cleanup) -------------
 STEP_START "Setup hpa-bridge network"
-bash "${SCRIPT_DIR}/setup-bridge.sh" && STEP_END "DONE" || {
+bash "${SCRIPT_DIR}/steps/step-01-bridge-setup/setup-bridge.sh" && STEP_END "DONE" || {
   STEP_END "FAILED" "Bridge setup failed"
   die "setup-bridge.sh failed"
 }
@@ -161,7 +161,7 @@ if [ "${SKIP_TOFU}" = false ] && [ "${CLUSTER_HEALTHY}" = false ]; then
 
   # Pre-flight cleanup (only runs when tofu apply is about to execute)
   log "Running pre-flight cleanup..."
-  bash "${SCRIPT_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" 2>&1 || {
+  bash "${MISC_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" 2>&1 || {
     log "Pre-flight cleanup had minor issues — continuing anyway."
   }
 
@@ -406,49 +406,53 @@ step() {
   fi
 }
 
-TOTAL_STEPS=25
+TOTAL_STEPS=26
+
+# Define steps directory
+STEPS_DIR="${SCRIPT_DIR}/steps"
+MISC_DIR="${SCRIPT_DIR}/misc"
 
 # Step 1 (setup-bridge) was already done inline with tofu — idempotent, skip here.
-step 2 "Install Cilium CNI"         ./install-cilium.sh ./verify-cilium.sh
-step 3 "Install Rook Ceph"          ./install-rook-ceph.sh ./verify-ceph.sh
-step 4 "Install Harbor"             ./install-harbor.sh ./verify-harbor.sh
-step 5 "Install Infisical"          ./install-infisical.sh ./verify-infisical.sh
+step 2 "Install Cilium CNI"         "${STEPS_DIR}/step-02-cilium/install-cilium.sh" "${STEPS_DIR}/step-02-cilium/verify-cilium.sh"
+step 3 "Install Rook Ceph"          "${STEPS_DIR}/step-03-rook-ceph/install-rook-ceph.sh" "${STEPS_DIR}/step-03-rook-ceph/verify-ceph.sh"
+step 4 "Install Harbor"             "${STEPS_DIR}/step-04-harbor/install-harbor.sh" "${STEPS_DIR}/step-04-harbor/verify-harbor.sh"
+step 5 "Install Infisical"          "${STEPS_DIR}/step-05-infisical/install-infisical.sh" "${STEPS_DIR}/step-05-infisical/verify-infisical.sh"
 step 6 "Install Runtimes (cert-manager, Knative, SpinKube, KeyDB)" \
-                                     ./install-runtimes.sh ./verify-runtimes.sh
+                                     "${STEPS_DIR}/step-06-runtimes/install-runtimes.sh" "${STEPS_DIR}/step-06-runtimes/verify-runtimes.sh"
 step 7 "Install Kafka (Strimzi Operator + Cluster)" \
-                                     ./install-kafka.sh ./verify-kafka.sh
+                                     "${STEPS_DIR}/step-07-kafka/install-kafka.sh" "${STEPS_DIR}/step-07-kafka/verify-kafka.sh"
 step 8 "Install Spegel P2P OCI Registry Mirror" \
-                                     ./install-spegel.sh ./verify-spegel.sh
+                                     "${STEPS_DIR}/step-08-spegel/install-spegel.sh" "${STEPS_DIR}/step-08-spegel/verify-spegel.sh"
 step 9 "Install Casdoor OIDC Provider" \
-                                     ./install-casdoor.sh ./verify-casdoor.sh
+                                     "${STEPS_DIR}/step-09-casdoor/install-casdoor.sh" "${STEPS_DIR}/step-09-casdoor/verify-casdoor.sh"
 step 10 "Install Casbin gRPC Authorizer" \
-                                     ./install-casbin.sh ./verify-casbin.sh
+                                     "${STEPS_DIR}/step-10-casbin/install-casbin.sh" "${STEPS_DIR}/step-10-casbin/verify-casbin.sh"
 step 11 "Install Envoy Gateway + Headlamp" \
-                                     ./install-gateway.sh ./verify-gateway.sh
+                                     "${STEPS_DIR}/step-11-gateway/install-gateway.sh" "${STEPS_DIR}/step-11-gateway/verify-gateway.sh"
 step 12 "Apply SecurityPolicy (Casbin extAuth + Casdoor OIDC)" \
-                                     ./install-security-policy.sh ./verify-security-policy.sh
+                                     "${STEPS_DIR}/step-12-security-policy/install-security-policy.sh" "${STEPS_DIR}/step-12-security-policy/verify-security-policy.sh"
 step 13 "Install GitOps (Kargo + ArgoCD)" \
-                                     ./install-gitops.sh ./verify-gitops.sh
+                                     "${STEPS_DIR}/step-13-gitops/install-gitops.sh" "${STEPS_DIR}/step-13-gitops/verify-gitops.sh"
 step 14 "Deploy Workloads (Welcome + Counter)" \
-                                     ./install-workloads.sh ./verify-workloads.sh
+                                     "${STEPS_DIR}/step-14-workloads/install-workloads.sh" "${STEPS_DIR}/step-14-workloads/verify-workloads.sh"
 step 15 "Install Streaming Workload (Stream-Processor)" \
-                                     ./install-streaming-workload.sh ./verify-streaming-workload.sh
-step 16 "Bootstrap Infisical Workloads"  ./bootstrap-infisical-workloads.sh ./verify-infisical-workloads.sh
-step 17 "Install Yugabytedb Distributed SQL"  ./install-yugabytedb.sh ./verify-yugabytedb.sh
-step 18 "Install Hasura GraphQL Engine"  ./install-hasura.sh ./verify-hasura.sh
-step 19 "Install VMSingle (VictoriaMetrics TSDB)"  ./install-vm-single.sh ./verify-vm.sh
-step 20 "Install vmagent DaemonSet"  ./install-vmagent.sh
-step 21 "Install kube-state-metrics"  ./install-kube-state-metrics.sh
-step 22 "Install Grafana Dashboards"  ./install-grafana.sh ./verify-grafana.sh
-step 23 "Install AlertManager"  ./install-alertmanager.sh ./verify-observability.sh
-step 24 "Configure TLS + Routes"  ./install-tls.sh ./verify-tls.sh
-step 26 "Install CouchDB Document Store" ./install-couchdb.sh ./verify-couchdb.sh
+                                     "${STEPS_DIR}/step-15-streaming-workload/install-streaming-workload.sh" "${STEPS_DIR}/step-15-streaming-workload/verify-streaming-workload.sh"
+step 16 "Bootstrap Infisical Workloads"  "${STEPS_DIR}/step-16-infisical-workloads/bootstrap-infisical-workloads.sh" "${STEPS_DIR}/step-16-infisical-workloads/verify-infisical-workloads.sh"
+step 17 "Install Yugabytedb Distributed SQL"  "${STEPS_DIR}/step-17-yugabytedb/install-yugabytedb.sh" "${STEPS_DIR}/step-17-yugabytedb/verify-yugabytedb.sh"
+step 18 "Install Hasura GraphQL Engine"  "${STEPS_DIR}/step-18-hasura/install-hasura.sh" "${STEPS_DIR}/step-18-hasura/verify-hasura.sh"
+step 19 "Install VMSingle (VictoriaMetrics TSDB)"  "${STEPS_DIR}/step-19-vm-single/install-vm-single.sh" "${STEPS_DIR}/step-19-vm-single/verify-vm.sh"
+step 20 "Install vmagent DaemonSet"  "${STEPS_DIR}/step-20-vmagent/install-vmagent.sh"
+step 21 "Install kube-state-metrics"  "${STEPS_DIR}/step-21-kube-state-metrics/install-kube-state-metrics.sh"
+step 22 "Install Grafana Dashboards"  "${STEPS_DIR}/step-22-grafana/install-grafana.sh" "${STEPS_DIR}/step-22-grafana/verify-grafana.sh"
+step 23 "Install AlertManager"  "${STEPS_DIR}/step-23-alertmanager/install-alertmanager.sh" "${STEPS_DIR}/step-23-alertmanager/verify-observability.sh"
+step 24 "Configure TLS + Routes"  "${STEPS_DIR}/step-24-tls/install-tls.sh" "${STEPS_DIR}/step-24-tls/verify-tls.sh"
+step 26 "Install CouchDB Document Store" "${STEPS_DIR}/step-26-couchdb/install-couchdb.sh" "${STEPS_DIR}/step-26-couchdb/verify-couchdb.sh"
 
 # Step 25: Seed hydration — only runs if SEED_DIR is set (air-gapped mode)
 if [ -n "${SEED_DIR:-}" ]; then
   log "Step 25: Hydrating Harbor from seed..."
-  ./hydrate-harbor.sh 2>&1 || log "  (non-fatal) Harbor hydration had issues"
-  ./hydrate-tofu.sh 2>&1 || log "  (non-fatal) Tofu hydration had issues"
+  "${STEPS_DIR}/step-25-seed-hydration/hydrate-harbor.sh" 2>&1 || log "  (non-fatal) Harbor hydration had issues"
+  "${STEPS_DIR}/step-25-seed-hydration/hydrate-tofu.sh" 2>&1 || log "  (non-fatal) Tofu hydration had issues"
 else
   log "Step 25: SEED_DIR not set — skipping seed hydration"
 fi
@@ -459,35 +463,28 @@ log "========== Running Verification Scripts =========="
 
 # Check static artifacts first
 log "--- verify-manifests.sh (static) ---"
-bash ./verify-manifests.sh 2>&1 || log "  (non-fatal) Some repos may be unreachable"
+bash "${MISC_DIR}/verify-manifests.sh" 2>&1 || log "  (non-fatal) Some repos may be unreachable"
 
 # If SEED_DIR is set, verify seed artifacts
 if [ -n "${SEED_DIR:-}" ]; then
   log "--- verify-seed.sh ---"
-  bash ./verify-seed.sh --seed-dir "${SEED_DIR}" 2>&1 || log "  (non-fatal) Seed verification had issues"
+  bash "${MISC_DIR}/verify-seed.sh" --seed-dir "${SEED_DIR}" 2>&1 || log "  (non-fatal) Seed verification had issues"
 fi
 # Runtime checks
-for verify_script in verify-cilium.sh verify-ceph.sh verify-harbor.sh \
-                     verify-infisical.sh verify-infisical-workloads.sh verify-yugabytedb.sh verify-couchdb.sh verify-hasura.sh verify-datagraph.sh verify-vm.sh verify-grafana.sh verify-observability.sh verify-tls.sh verify-mesh.sh verify-runtimes.sh verify-kafka.sh verify-spegel.sh \
-                     verify-casdoor.sh verify-casbin.sh verify-gateway.sh verify-security-policy.sh verify-gitops.sh; do
-  log "--- ${verify_script} ---"
-  bash "./${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
+for verify_script in "${STEPS_DIR}/step-02-cilium/verify-cilium.sh" "${STEPS_DIR}/step-03-rook-ceph/verify-ceph.sh" "${STEPS_DIR}/step-04-harbor/verify-harbor.sh" \
+                     "${STEPS_DIR}/step-05-infisical/verify-infisical.sh" "${STEPS_DIR}/step-06-runtimes/verify-runtimes.sh" "${STEPS_DIR}/step-07-kafka/verify-kafka.sh" "${STEPS_DIR}/step-08-spegel/verify-spegel.sh" \
+                     "${STEPS_DIR}/step-09-casdoor/verify-casdoor.sh" "${STEPS_DIR}/step-10-casbin/verify-casbin.sh" "${STEPS_DIR}/step-11-gateway/verify-gateway.sh" "${STEPS_DIR}/step-12-security-policy/verify-security-policy.sh" "${STEPS_DIR}/step-13-gitops/verify-gitops.sh"; do
+  log "--- $(basename ${verify_script}) ---"
+  bash "${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
 done
 
-# Workload verification with Envoy IP
-if [ -z "${ENVOY_IP}" ]; then
-  log "--- verify-workloads.sh (auto-discover Envoy IP) ---"
-  bash ./verify-workloads.sh 2>&1 || log "  (non-fatal) Workload verification may need Envoy IP"
-
-  log "--- verify-streaming-workload.sh ---"
-  bash ./verify-streaming-workload.sh --disable-prodcons-test 2>&1 || log "  (non-fatal) Streaming workload verification may need cluster"
-else
-  log "--- verify-workloads.sh (Envoy IP: ${ENVOY_IP}) ---"
-  bash ./verify-workloads.sh --envoy-ip "${ENVOY_IP}" 2>&1 || log "  (non-fatal) Some workload checks may need more time"
-
-  log "--- verify-streaming-workload.sh (Envoy IP: ${ENVOY_IP}) ---"
-  bash ./verify-streaming-workload.sh 2>&1 || log "  (non-fatal) Streaming workload verification may need more time"
-fi
+# Additional runtime checks (from the original for loop)
+for verify_script in "${STEPS_DIR}/step-04-harbor/verify-harbor.sh" \
+                     "${STEPS_DIR}/step-05-infisical/verify-infisical.sh" "${STEPS_DIR}/step-16-infisical-workloads/verify-infisical-workloads.sh" "${STEPS_DIR}/step-17-yugabytedb/verify-yugabytedb.sh" "${STEPS_DIR}/step-26-couchdb/verify-couchdb.sh" "${STEPS_DIR}/step-18-hasura/verify-hasura.sh" "${MISC_DIR}/verify-datagraph.sh" "${STEPS_DIR}/step-19-vm-single/verify-vm.sh" "${STEPS_DIR}/step-22-grafana/verify-grafana.sh" "${STEPS_DIR}/step-23-alertmanager/verify-observability.sh" "${STEPS_DIR}/step-24-tls/verify-tls.sh" "${MISC_DIR}/verify-mesh.sh" "${STEPS_DIR}/step-06-runtimes/verify-runtimes.sh" "${STEPS_DIR}/step-07-kafka/verify-kafka.sh" "${STEPS_DIR}/step-08-spegel/verify-spegel.sh" \
+                     "${STEPS_DIR}/step-09-casdoor/verify-casdoor.sh" "${STEPS_DIR}/step-10-casbin/verify-casbin.sh" "${STEPS_DIR}/step-11-gateway/verify-gateway.sh" "${STEPS_DIR}/step-12-security-policy/verify-security-policy.sh" "${STEPS_DIR}/step-13-gitops/verify-gitops.sh"; do
+  log "--- $(basename ${verify_script}) ---"
+  bash "${verify_script}" 2>&1 || log "  (non-fatal) Some checks may need more time"
+done
 
 # ---- Summary --------------------------------------------------------------
 DURATION=$(( $(date +%s) - START_TIME ))
