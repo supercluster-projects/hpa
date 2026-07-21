@@ -18,7 +18,8 @@
 #           [--gateway-name <name>] [--gateway-namespace <ns>]
 #           [--policy-name <name>] [--help]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Required environment variables (fail fast if missing from .env) ---
 require_env DEV_GATEWAY_NAME

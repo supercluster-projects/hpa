@@ -12,7 +12,8 @@
 #                       [--vm-single-svc <name>]
 #                       [--vmagent-svc <name>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 NAMESPACE="observability"

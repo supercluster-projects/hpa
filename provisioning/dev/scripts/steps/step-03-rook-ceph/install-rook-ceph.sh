@@ -16,7 +16,8 @@
 #                               [--wait-timeout <duration>] [--pool-cidr <cidr>]
 #                               [--worker-count <count>] [--node-prefix <prefix>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 

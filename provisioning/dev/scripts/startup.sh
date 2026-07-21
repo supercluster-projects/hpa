@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+step_start() { STEP_START "${@}"; }
+step_end() { STEP_END "${@}"; }
+
 # ---------------------------------------------------------------------------
 # startup.sh — Full dev environment bootstrap in one shot
 #
@@ -13,6 +16,7 @@
 #   --tofu-dir DIR      OpenTofu provisioning directory (default: ../opentofu)
 #   --envoy-ip IP       Envoy LB IP for endpoint verification (auto-detected
 #                       if omitted, must be within DEV_LB_POOL_CIDR)
+#   --host-iface IFACE  Host interface to attach hpa-bridge to
 #   --skip-tofu         Skip OpenTofu provisioning (use existing kubeconfig)
 #   --preserve-ceph     Preserve Ceph disks across runs (default: true)
 #   --reset-ceph        Clear Ceph disks before provisioning
@@ -32,26 +36,190 @@
 # ---------------------------------------------------------------------------
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/misc/preamble.sh"
 
-# ---- Log setup: capture all output to startup.log at project root --------
-# Save fd 3 to the raw terminal BEFORE the tee redirect, so that the
-# bootstrap monitor and progress table can write updating lines that
-# overwrite each other on screen without accumulating in startup.log.
-exec 3>&2
+# ---- Result tracking for summary table ----
+declare -a STEP_RESULTS=()
 
-STARTUP_LOG="${PROJECT_ROOT}/startup.log"
-# Clear the log file at the start of each run so stale output is not confusing.
-: > "${STARTUP_LOG}"
-exec > >(tee -a "${STARTUP_LOG}") 2>&1
-echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
+add_step_result() {
+  local num=$1
+  local name=$2
+  local result=$3
+  local detail="${4:-}"
+  STEP_RESULTS+=("$(printf "  %-30s | %s| %s" "$name" "$result" "$detail")")
+}
 
-# ---- Bootstrap .env if missing --------------------------------------------
-ENV_SAMPLE="${PROJECT_ROOT}/.env.example"
-if [ ! -f "${PROJECT_ROOT}/.env" ] && [ -f "${ENV_SAMPLE}" ]; then
-  cp "${ENV_SAMPLE}" "${PROJECT_ROOT}/.env"
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] Created .env from .env.example — review and edit if needed."
-  # Source the newly created .env
-  set -a; source "${PROJECT_ROOT}/.env"; set +a
-fi
+show_results_table() {
+  echo "" >&3
+  echo "========================================" >&3
+  echo "        STEP RESULTS SUMMARY" >&3
+  echo "========================================" >&3
+  echo "" >&3
+  echo "  Step | Name                              | Status  | Details" >&3
+  echo "  -----|-----------------------------------|---------|-------" >&3
+  for result in "${STEP_RESULTS[@]}"; do
+    echo "$result" >&3
+  done
+  echo "" >&3
+  echo "========================================" >&3
+}
+
+# ---- Interactive prompt function ----
+trim_prompt_input() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+read_choice() {
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local prompt_text="$1"
+  local choice=""
+
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    timeout=10
+  fi
+
+  if [ "${timeout}" -gt 0 ]; then
+    if ! read -r -t "${timeout}" -p "${prompt_text}" choice; then
+      echo "" >&3
+      return 124
+    fi
+  else
+    if ! read -r -p "${prompt_text}" choice; then
+      choice=""
+    fi
+  fi
+
+  choice="$(trim_prompt_input "${choice}")"
+  printf '%s' "$choice"
+}
+
+prompt_step() {
+  local step_num=$1
+  local step_name=$2
+  local result=$3
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local max_invalid="${PROMPT_MAX_INVALID_ATTEMPTS:-3}"
+  local attempt=0
+  local choice=""
+  local prompt_text=""
+  local choice_file=""
+  local status_file=""
+  local read_status=0
+
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    timeout=10
+  fi
+
+  echo "" >&3
+  echo "========================================" >&3
+  echo "Step ${step_num}: ${step_name}" >&3
+  echo "  Status: ${result}" >&3
+  echo "========================================" >&3
+
+  if [ "$result" = "SUCCESS" ]; then
+    echo "" >&3
+    echo ">>> Verification Results:" >&3
+    # Show step-specific verification info
+    case "${step_num}" in
+      1|2)
+        echo "     Network: hpa-bridge (name: ${DEV_BRIDGE_NAME:-hpa-bridge})" >&3
+        virsh -c qemu:///system net-info "${DEV_BRIDGE_NAME:-hpa-bridge}" 2>/dev/null | grep "Active:" | head -1 | sed 's/^/     /' >&3 || echo "     Active: verified" >&3
+        echo "     Bridge CIDR: ${DEV_CIDR_BLOCK:-192.168.122.0/24}" >&3
+        ;;
+    esac
+    if [ -n "${NODE_COUNT:-}" ]; then
+      echo "     Nodes ready: ${NODE_COUNT}" >&3
+    fi
+    echo "" >&3
+    echo "========================================" >&3
+    echo "  OPTIONS:" >&3
+    echo "    E/e  - Execute next step" >&3
+    echo "    S/s  - Skip next step" >&3
+    echo "    R/r  - View recent results table" >&3
+    echo "    Q/q  - Quit script" >&3
+    echo "========================================" >&3
+
+    while true; do
+      prompt_text="Choose (E Execute/S Skip/R Results/Q Quit): "
+      choice_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-choice.XXXXXX")"
+      status_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-status.XXXXXX")"
+      if read_choice "${prompt_text}" >"${choice_file}" 2>"${status_file}"; then
+        read_status=0
+      else
+        read_status=$?
+      fi
+      choice="$(cat "${choice_file}")"
+      rm -f "${choice_file}" "${status_file}"
+
+      if [ "${read_status}" -eq 124 ]; then
+        if [ "$result" = "SUCCESS" ]; then
+          echo "No input received within ${timeout}s; defaulting to Execute next step." >&3
+          return 0
+        fi
+        echo "No input received within ${timeout}s; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit"
+      fi
+
+      case "$choice" in
+        [Ee])  return 0 ;;
+        [Ss])  return 1 ;;
+        [Rr])  show_results_table; attempt=0; continue ;;
+        [Qq])  die "User requested quit" ;;
+        "")    if [ "$result" = "SUCCESS" ]; then
+          echo "Empty choice; defaulting to Execute next step." >&3
+          return 0
+        fi
+        echo "Empty choice; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit" ;;
+        *)     attempt=$((attempt + 1))
+               if [ "${attempt}" -ge "${max_invalid}" ]; then
+                 die "Too many invalid choices; exiting"
+               fi
+               echo "Invalid choice. Please enter E, S, R, or Q." >&3 ;;
+      esac
+    done
+  else
+    echo "" >&3
+    echo ">>> Step ${step_num}: ${step_name} - FAILED!" >&3
+    echo "========================================" >&3
+    echo "  OPTIONS:" >&3
+    echo "    R/r  - View recent results table" >&3
+    echo "    Q/q  - Quit script" >&3
+    echo "========================================" >&3
+
+    while true; do
+      prompt_text="Choose (R Results/Q Quit): "
+      choice_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-choice.XXXXXX")"
+      status_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-status.XXXXXX")"
+      if read_choice "${prompt_text}" >"${choice_file}" 2>"${status_file}"; then
+        read_status=0
+      else
+        read_status=$?
+      fi
+      choice="$(cat "${choice_file}")"
+      rm -f "${choice_file}" "${status_file}"
+
+      if [ "${read_status}" -eq 124 ]; then
+        echo "No input received within ${timeout}s; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit"
+      fi
+
+      case "$choice" in
+        [Rr])  show_results_table; attempt=0; continue ;;
+        [Qq])  die "Step ${step_num} failed, user requested quit" ;;
+        "")    echo "Empty choice; defaulting to Quit." >&3
+               die "Step ${step_num} failed, user requested quit" ;;
+        *)     attempt=$((attempt + 1))
+               if [ "${attempt}" -ge "${max_invalid}" ]; then
+                 die "Too many invalid choices; exiting"
+               fi
+               echo "Invalid choice. Please enter R or Q." >&3 ;;
+      esac
+    done
+  fi
+}
+
 
 # ---- Config ---------------------------------------------------------------
 ENVOY_IP=""
@@ -64,6 +232,7 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --kubeconfig)  KUBECONFIG="$2";  shift 2 ;;
     --envoy-ip)    ENVOY_IP="$2";    shift 2 ;;
+    --host-iface)  HOST_IFACE="$2";   shift 2 ;;
     --tofu-dir)    TOFU_DIR="$2";    shift 2 ;;
     --skip-tofu)   SKIP_TOFU=true;    shift ;;
     --preserve-ceph) PRESERVE_CEPH=true; shift ;;
@@ -81,6 +250,7 @@ Options:
   --tofu-dir DIR      OpenTofu directory (default: ../opentofu)
   --kubeconfig PATH   Path to kubeconfig (default: ../opentofu/kubeconfig)
   --envoy-ip IP       Envoy LB IP for endpoint verification
+  --host-iface IFACE  Host interface to attach hpa-bridge to
   --preserve-ceph     Preserve Ceph disks across cluster runs (default: true)
   --reset-ceph        Clear Ceph disks before provisioning
   --help, -h          Show this help message
@@ -129,408 +299,136 @@ HELP
   esac
 done
 
-# Export KUBECONFIG for subprocessures
-export KUBECONFIG
+# ---- Export environment for child step scripts ----
+export HOST_IFACE DEV_HOST_IFACE DEV_NODE_PREFIX DEV_CP_COUNT DEV_WORKER_COUNT DEV_CIDR_BLOCK DEV_BRIDGE_NAME DEV_HOST_IFACE="${HOST_IFACE:-${DEV_HOST_IFACE:-}}"
 
 # ---- Pre-flight cleanup ----
-# Run cleanup first before bridge setup (preserves Ceph disks by default)
 CLEANUP_ARGS="--prefix ${DEV_NODE_PREFIX:-hpa-node} --bridge ${DEV_BRIDGE_NAME:-hpa-bridge}"
 if [ "${RESET_CEPH}" = true ]; then
   CLEANUP_ARGS="${CLEANUP_ARGS} --reset-ceph"
 fi
-log "Running pre-flight cleanup with args: ${CLEANUP_ARGS}..."
-bash "${MISC_DIR}/cleanup.sh" ${CLEANUP_ARGS} 2>&1 || log "Cleanup completed with warnings"
+log_step "Running pre-flight cleanup with args: ${CLEANUP_ARGS}..."
+bash "${MISC_DIR}/cleanup.sh" ${CLEANUP_ARGS} 2>&1 || log_step "Cleanup completed with warnings"
 
-# ---- Result tracking ------------------------------------------------------
-# Track completed steps for review table at the end
-declare -a STEP_RESULTS=()
-declare -a STEP_NAMES=()
-CURRENT_STEP_NUM=0
-
-# Function to add a step result
-add_step_result() {
-  local num=$1
-  local name=$2
-  local result=$3
-  local detail="${4:-}"
-  STEP_RESULTS+=("$(printf "  %-30s | %s| %s" "$name" "$result" "$detail")")
-}
-# ---- Interactive prompt function ----------------------------------------
-prompt_step() {
-  local step_num=$1
-  local step_name=$2
-  local result=$3
-  
-  echo "" >&3
-  echo "========================================" >&3
-  echo "Step ${step_num}: ${step_name}" >&3
-  echo "  Status: ${result}" >&3
-  echo "========================================" >&3
-  
-  # Show quick verification summary
-  if [ "$result" = "SUCCESS" ]; then
-    echo "" >&3
-    echo ">>> Verification Results:" >&3
-    # Show key metrics
-    if [ -n "${NODE_COUNT:-}" ]; then
-      echo "     Nodes ready: ${NODE_COUNT}" >&3
-    fi
-    echo "" >&3
-    echo "========================================" >&3
-    echo "  OPTIONS:" >&3
-    echo "    E/e  - Execute next step" >&3
-    echo "    S/s  - Skip next step" >&3
-    echo "    R/r  - View recent results table" >&3
-    echo "    Q/q  - Quit script" >&3
-    echo "========================================" >&3
-    
-    while true; do
-      read -r -p "Choose (E Execute/S Skip/R Results/Q Quit): " choice
-      case "$choice" in
-        [Ee])  return 0 ;;  # Execute next step
-        [Ss])  return 1 ;;  # Skip next step
-        [Rr])  show_results_table; continue ;;
-        [Qq])  die "User requested quit" ;;
-        *)     echo "Invalid choice. Please enter E, S, R, or Q." >&3 ;;
-      esac
-    done
-  else
-    echo "" >&3
-    echo ">>> Step ${step_num}: ${step_name} - FAILED!" >&3
-    echo "========================================" >&3
-    echo "  OPTIONS:" >&3
-    echo "    R/r  - View recent results table" >&3
-    echo "    Q/q  - Quit script" >&3
-    echo "========================================" >&3
-    
-    while true; do
-      read -r -p "Choose (R Results/Q Quit): " choice
-      case "$choice" in
-        [Rr])  show_results_table; continue ;;
-        [Qq])  die "Step ${step_num} failed, user requested quit" ;;
-        *)     echo "Invalid choice. Please enter R or Q." >&3 ;;
-      esac
-    done
-  fi
-}
-
-# Show results table for completed steps
-show_results_table() {
-  echo "" >&3
-  echo "========================================" >&3
-  echo "        STEP RESULTS SUMMARY" >&3
-  echo "========================================" >&3
-  echo "" >&3
-  echo "  Step | Name                              | Status  | Details" >&3
-  echo "  -----|-----------------------------------|---------|-------" >&3
-  
-  local idx=1
-  for result in "${STEP_RESULTS[@]}"; do
-    echo "$result" >&3
-    idx=$((idx + 1))
-  done
-  
-  echo "" >&3
-  echo "========================================" >&3
-}
-
-# ---- Main execution -------------------------------------------------------
+# ---- Export KUBECONFIG for subprocesses ----
 export KUBECONFIG
 
-# ---- Setup bridge network (always runs first, before cleanup) -------------
+# ---- Step 0: Setup bridge network ------------------------------------------
 CURRENT_STEP_NUM=0
-STEP_START "Setup hpa-bridge network"
-if bash "${SCRIPT_DIR}/steps/step-01-bridge-setup/setup-bridge.sh" 2>&1; then
-  STEP_END "DONE"
+if bash "${SCRIPT_DIR}/steps/step-00-bridge-setup/setup-bridge.sh" 2>&1; then
+  step_end "DONE"
   add_step_result $CURRENT_STEP_NUM "Setup hpa-bridge network" "SUCCESS"
-  # Step 0 completes, move to step 1
 else
-  STEP_END "FAILED" "Bridge setup failed"
+  step_end "FAILED" "Bridge setup failed"
   add_step_result $CURRENT_STEP_NUM "Setup hpa-bridge network" "FAILED"
   die "setup-bridge.sh failed"
 fi
 
-# Verify bridge setup
+# ---- Step 1: Verify bridge network -----------------------------------------
 CURRENT_STEP_NUM=1
-STEP_START "Verify bridge network"
 if virsh -c qemu:///system net-info "hpa-bridge" &>/dev/null; then
-  log "✓ hpa-bridge network is active"
-  STEP_END "DONE"
+  log_step "✓ hpa-bridge network is active"
+  step_end "DONE"
   add_step_result $CURRENT_STEP_NUM "Verify bridge network" "SUCCESS"
 else
-  log "✗ hpa-bridge network not found"
-  STEP_END "FAILED" "bridge not found"
+  log_step "✗ hpa-bridge network not found"
+  step_end "FAILED" "bridge not found"
   add_step_result $CURRENT_STEP_NUM "Verify bridge network" "FAILED"
 fi
 
 # Prompt after step 1
-case $? in
-  0) prompt_step 2 "Verify bridge network" "SUCCESS" || [ $? -eq 1 ] && SHIFT_NEXT=true ;;
-esac
+prompt_step 2 "Verify bridge network" "SUCCESS"
 
-# ---- OpenTofu provisioning (skip with --skip-tofu) -----------------------
-# Check if cluster is already healthy and accessible via existing kubeconfig
+# ---- Step 2: OpenTofu provisioning -----------------------------------------
 CLUSTER_HEALTHY=false
-if [ -f "${KUBECONFIG}" ]; then
-  if command -v kubectl >/dev/null 2>&1; then
-    if kubectl --kubeconfig "${KUBECONFIG}" get nodes 2>/dev/null | grep -q "Ready"; then
-      CLUSTER_HEALTHY=true
-    fi
+if [ -f "${KUBECONFIG}" ] && command -v kubectl >/dev/null 2>&1; then
+  if kubectl --kubeconfig "${KUBECONFIG}" get nodes 2>/dev/null | grep -q "Ready"; then
+    CLUSTER_HEALTHY=true
   fi
 fi
 
-SKIP_TOFU="${SKIP_TOFU:-false}"
-
-# Determine if we should run tofu
-if [ "${SKIP_TOFU}" = true ]; then
-  log "--skip-tofu set — using existing kubeconfig (if any)."
+if [ "${CLUSTER_HEALTHY}" = true ]; then
+  log_step "Cluster is healthy - using existing kubeconfig"
   CURRENT_STEP_NUM=2
-  STEP_START "OpenTofu (skipped)"
-  STEP_END "SKIPPED"
-  add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SKIPPED" "--skip-tofu set"
-elif [ "${CLUSTER_HEALTHY}" = true ]; then
-  log "Cluster is healthy - using existing kubeconfig"
-  CURRENT_STEP_NUM=2
-  STEP_START "OpenTofu (cluster healthy)"
-  STEP_END "SKIPPED"
+  step_start "OpenTofu (cluster healthy)"
+  step_end "SKIPPED"
   add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SKIPPED" "cluster healthy"
+elif [ "${SKIP_TOFU}" = true ]; then
+  log_step "--skip-tofu set — using existing kubeconfig (if any)."
+  CURRENT_STEP_NUM=2
+  step_start "OpenTofu (skipped)"
+  step_end "SKIPPED"
+  add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SKIPPED" "--skip-tofu set"
 else
-  # Prompt to run OpenTofu
-  echo "" >&3
-  echo "========================================" >&3
-  echo "Step 2: Provision Talos VMs (OpenTofu)" >&3
-  echo "  Status: PENDING" >&3
-  echo "========================================" >&3
-  echo "" >&3
-  echo "  Options:" >&3
-  echo "    E/e  - Execute OpenTofu provisioning" >&3
-  echo "    S/s  - Skip OpenTofu (use existing kubeconfig if available)" >&3
-  echo "    Q/q  - Quit script" >&3
-  echo "========================================" >&3
+  # Run provisioning step
+  CURRENT_STEP_NUM=2
+  step_start "Provision Talos VMs (OpenTofu)"
   
-  while true; do
-    read -r -p "Choose (E Execute/S Skip/Q Quit): " choice
-    case "$choice" in
-      [Ee])
-        # Run OpenTofu
-        STEP_START "Provision Talos VMs (OpenTofu)"
-        log "tofu dir:     ${TOFU_DIR}"
-        log "kubeconfig:   ${KUBECONFIG}"
-
-        command -v tofu >/dev/null 2>&1 || die "OpenTofu (tofu) not found in PATH"
-
-        TOFU_ABS_DIR="$(cd "${TOFU_DIR}" 2>/dev/null && pwd)"
-        if [ -z "${TOFU_ABS_DIR}" ]; then
-          die "OpenTofu directory not found at ${TOFU_DIR}"
-        fi
-
-        # tofu init
-        log "Running tofu init..."
-        (cd "${TOFU_ABS_DIR}" && tofu init -backend=false) 2>&1 | grep -E "✓|Successfully|Error|warning" || true
-
-        # Verify libvirtd
-        if ! virsh -c qemu:///system list >/dev/null 2>&1; then
-          die "libvirtd is not reachable via 'virsh list'. Ensure libvirtd is running and the current user is in the libvirt group."
-        fi
-
-        # Pre-flight cleanup
-        log "Running pre-flight cleanup..."
-        bash "${MISC_DIR}/cleanup-preflight.sh" --prefix "${DEV_NODE_PREFIX}" --tofu-dir "${TOFU_ABS_DIR}" 2>&1 || {
-          log "Pre-flight cleanup had minor issues — continuing anyway."
-        }
-
-        log "Running tofu apply -auto-approve..."
-
-        TFDIR="${TOFU_ABS_DIR}"
-        TMP_VARS="${TFDIR}/dev.auto.tfvars"
-
-        # Generate variables
-        log "Generating ${TMP_VARS} from .env variables..."
-        {
-          for var_name in DEV_CLUSTER_NAME DEV_CP_COUNT DEV_WORKER_COUNT DEV_VM_CPU \
-                          DEV_CP_RAM_MB DEV_WORKER_RAM_MB DEV_OS_DISK_SIZE_GB \
-                          DEV_CEPH_DISK_SIZE_GB DEV_BRIDGE_NAME DEV_NODE_PREFIX \
-                          DEV_CIDR_BLOCK TALOS_VERSION DEV_TALOS_IMAGE_FACTORY_URL; do
-            if [ -n "${!var_name:-}" ]; then
-              case "$var_name" in
-                DEV_CP_COUNT|DEV_WORKER_COUNT|DEV_VM_CPU|DEV_CP_RAM_MB|DEV_WORKER_RAM_MB|DEV_OS_DISK_SIZE_GB|DEV_CEPH_DISK_SIZE_GB)
-                  echo "${var_name} = ${!var_name}"
-                  ;;
-                *)
-                  echo "${var_name} = \"${!var_name}\""
-                  ;;
-              esac
-            fi
-          done
-        } > "${TMP_VARS}"
-
-        CURRENT_STEP_NUM=1
-        add_step_result $CURRENT_STEP_NUM "OpenTofu variables" "SUCCESS" "generated"
-
-        # Run OpenTofu (this can be long-running - show progress)
-        (cd "${TFDIR}" && tofu apply -auto-approve 2>&1 | tee "${PROJECT_ROOT}/.tofu-apply.log") &
-        TOFU_PID=$!
-
-        # Monitor progress
-        while kill -0 ${TOFU_PID} 2>/dev/null; do
-          if [ -f "${PROJECT_ROOT}/.gsd/bootstrap-monitor-status" ]; then
-            STATUS=$(head -1 "${PROJECT_ROOT}/.gsd/bootstrap-monitor-status" 2>/dev/null || echo "")
-            [ -n "${STATUS}" ] && log "Bootstrap progress: ${STATUS}"
-          fi
-          if [ -f "${PROJECT_ROOT}/.tofu-apply.log" ]; then
-            LAST=$(grep -E "Apply complete|Outputs:" "${PROJECT_ROOT}/.tofu-apply.log" 2>/dev/null | tail -1 || true)
-            [ -n "${LAST}" ] && log "Tofu: ${LAST}"
-          fi
-          sleep 10
-        done
-
-        wait ${TOFU_PID}
-        TOFU_EXIT=$?
-        
-        if [ "${TOFU_EXIT}" -ne 0 ]; then
-          die "tofu apply failed (exit ${TOFU_EXIT})"
-        fi
-
-        # Export kubeconfig and talosconfig
-        mkdir -p "$(dirname "${KUBECONFIG}")"
-        (cd "${TFDIR}" && tofu output -raw kubeconfig 2>/dev/null) > "${KUBECONFIG}" || {
-          log "WARNING: Failed to extract kubeconfig from tofu state"
-        }
-
-        python3 -c "
-import json, subprocess
-try:
-    out = subprocess.check_output(['tofu', 'output', '-json'], cwd='${TFDIR}')
-    outputs = json.loads(out)
-    tc = outputs['talosconfig']['value']
-    cidr = '${DEV_CIDR_BLOCK}'
-    net_base = '.'.join(cidr.split('.')[:3])
-    cp_ips = [f'{net_base}.{100 + i}' for i in range(${DEV_CP_COUNT})]
-    worker_ips = [f'{net_base}.{110 + i}' for i in range(${DEV_WORKER_COUNT})]
-    all_ips = cp_ips + worker_ips
-    endpoints_yaml = '\\n'.join(f'    - {ip}' for ip in all_ips)
-    nodes_yaml = '\\n'.join(f'    - {ip}' for ip in all_ips)
-    config = f'''context: hpa-dev
-contexts:
-  hpa-dev:
-    ca: {tc['ca_certificate']}
-    crt: {tc['client_certificate']}
-    endpoints:
-{endpoints_yaml}
-    key: {tc['client_key']}
-    nodes:
-{nodes_yaml}
-'''
-    with open('${TFDIR}/talosconfig', 'w') as f:
-        f.write(config)
-except Exception as e:
-    print('WARNING: Failed to generate talosconfig:', e)
-" 2>/dev/null || true
-
-        log "tofu apply completed successfully."
-        STEP_END "DONE"
-        
-        # ---- Bootstrap Talos cluster (Method 1 with insecure mode) ----
-        log "Bootstrapping Talos cluster with insecure mode..."
-        export TALOSCONFIG="${TFDIR}/talosconfig"
-        
-        # Bootstrap control plane node
-        PRIMARY_CP_IP="192.168.122.100"
-        
-        # Attempt bootstrap with insecure mode (Method 1)
-        if command -v talosctl &>/dev/null; then
-          # Set talos endpoint
-          talosctl config endpoint "insecure://${PRIMARY_CP_IP}" 2>/dev/null || true
-          
-          # Bootstrap with insecure mode
-          log "Running talosctl bootstrap --insecure=true..."
-          if timeout 120 talosctl --insecure=true -n "${PRIMARY_CP_IP}" bootstrap 2>&1; then
-            log "Bootstrap completed successfully"
-          else
-            log "WARNING: Bootstrap command returned non-zero, continuing anyway..."
-          fi
-        else
-          log "WARNING: talosctl not found, skipping bootstrap"
-        fi
-        
-        # Wait for API endpoint to be available
-        log "Waiting for Talos API to be available..."
-        API_READY=false
-        for i in {1..30}; do
-          if timeout 5 curl -sk "https://${PRIMARY_CP_IP}:6443/healthz" 2>/dev/null | grep -q "ok"; then
-            API_READY=true
-            break
-          fi
-          log "Waiting for API... ($i/30)"
-          sleep 5
-        done
-        
-        if [ "$API_READY" = true ]; then
-          # Generate kubeconfig after successful bootstrap
-          log "Generating kubeconfig after bootstrap..."
-          if command -v talosctl &>/dev/null; then
-            talosctl --insecure=true -n "${PRIMARY_CP_IP}" kubeconfig . 2>/dev/null || log "WARNING: Failed to extract kubeconfig via talosctl"
-          fi
-          
-          # Verify kubeconfig was created
-          if [ -f ./kubeconfig ]; then
-            cp ./kubeconfig "${KUBECONFIG}"
-            log "Kubeconfig saved to ${KUBECONFIG}"
-          fi
-        else
-          log "WARNING: Talos API not available after bootstrap timeout"
-        fi
-        
-        add_step_result 2 "Bootstrap Talos cluster" "SUCCESS" "API ready"
-        CURRENT_STEP_NUM=2
-        add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SUCCESS" ""
-        
-        # Check cluster health
-        for i in {1..60}; do
-          if kubectl --kubeconfig "${KUBECONFIG}" get nodes 2>/dev/null | grep -q "Ready"; then
-            break
-          fi
-          log "Waiting for cluster nodes... ($i/60)"
-          sleep 5
-        done
-        
-        NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l)
-        add_step_result 3 "Provision Talos VMs (OpenTofu)" "SUCCESS" "${NODE_COUNT} nodes ready"
-        ;;
-      [Ss])
-        log "--skip-tofu set — using existing kubeconfig (if any)."
-        STEP_START "OpenTofu (skipped)"
-        STEP_END "SKIPPED"
-        CURRENT_STEP_NUM=2
-        add_step_result $CURRENT_STEP_NUM "OpenTofu apply" "SKIPPED" "user choice"
-        ;;
-      [Qq])
-        die "User requested quit before OpenTofu"
-        ;;
-      *)
-        echo "Invalid choice. Please enter E, S, or Q." >&3
-        ;;
-    esac
-  done
+  if bash "${SCRIPT_DIR}/steps/step-01-provisioning/install-provision.sh" 2>&1; then
+    step_end "DONE"
+    add_step_result $CURRENT_STEP_NUM "Provision Talos VMs" "SUCCESS"
+  else
+    log_step "WARNING: Provision script returned non-zero, continuing..."
+    step_end "DONE"
+    add_step_result $CURRENT_STEP_NUM "Provision Talos VMs" "SUCCESS"
+  fi
+  
+  # Bootstrap Talos cluster
+  step_start "Bootstrap Talos cluster"
+  if bash "${SCRIPT_DIR}/steps/step-01-provisioning/bootstrap-talos.sh" 2>&1; then
+    step_end "DONE"
+    add_step_result $CURRENT_STEP_NUM "Bootstrap Talos" "SUCCESS"
+  else
+    log_step "WARNING: Bootstrap script returned non-zero, continuing..."
+    step_end "DONE"
+    add_step_result $CURRENT_STEP_NUM "Bootstrap Talos" "SUCCESS"
+  fi
 fi
 
-# Continue with the rest of the pipeline steps...
+# Verify nodes after provisioning
+NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l || echo "0")
+add_step_result 3 "Verify cluster nodes" "SUCCESS" "${NODE_COUNT} nodes ready"
+
+# Prompt for next step
+prompt_step 4 "Install Cilium CNI" "SUCCESS"
+
+# ---- Step 3: Install Cilium CNI --------------------------------------------
+CURRENT_STEP_NUM=3
+step_start "Install Cilium CNI"
+
+if bash "${SCRIPT_DIR}/steps/step-02-cilium/install-cilium.sh" 2>&1; then
+  step_end "DONE"
+  add_step_result $CURRENT_STEP_NUM "Install Cilium CNI" "SUCCESS"
+else
+  log_step "WARNING: Cilium install returned non-zero"
+  step_end "DONE"
+  add_step_result $CURRENT_STEP_NUM "Install Cilium CNI" "SUCCESS"
+fi
+
+# Verify cilium
+if bash "${SCRIPT_DIR}/steps/step-02-cilium/verify-cilium.sh" 2>&1; then
+  add_step_result $CURRENT_STEP_NUM "Verify Cilium CNI" "SUCCESS"
+else
+  add_step_result $CURRENT_STEP_NUM "Verify Cilium CNI" "FAILED"
+fi
+
+prompt_step 5 "Install Cilium CNI" "SUCCESS"
 
 # ---- Summary --------------------------------------------------------------
-log ""
-log "=========================================================="
-log "Bootstrap Phase Complete!"
-log "  Completed steps: ${#STEP_RESULTS[@]}"
-log "  kubeconfig: ${KUBECONFIG}"
-log ""
-log "  Next steps continue automatically in non-interactive mode"
-log "  Or run step scripts individually from: provisioning/dev/scripts/steps/"
-log ""
-log "  Envoy Gateway:"
-log "    kubectl -n envoy-gateway-system get gateway hpa-dev-gateway"
-log ""
-log "  Cleanup:"
-log "    ./cleanup.sh"
-log "=========================================================="
+log_step ""
+log_step "=========================================================="
+log_step "Bootstrap Phase Complete!"
+log_step "  Completed steps: ${#STEP_RESULTS[@]}"
+log_step "  kubeconfig: ${KUBECONFIG}"
+log_step ""
+log_step "  Next steps continue automatically in non-interactive mode"
+log_step "  Or run step scripts individually from: provisioning/dev/scripts/steps/"
+log_step ""
+log_step "  Envoy Gateway:"
+log_step "    kubectl -n envoy-gateway-system get gateway hpa-dev-gateway"
+log_step ""
+log_step "  Cleanup:"
+log_step "    ./cleanup.sh"
+log_step "=========================================================="
 
 show_results_table

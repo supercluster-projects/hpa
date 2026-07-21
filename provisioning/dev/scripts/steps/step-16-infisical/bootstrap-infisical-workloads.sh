@@ -30,7 +30,8 @@
 #                                           [--admin-email <email>]
 #                                           [--wait-timeout <duration>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Required environment variables (fail fast if missing from .env) ---
 require_env INFISICAL_ADMIN_PASSWORD

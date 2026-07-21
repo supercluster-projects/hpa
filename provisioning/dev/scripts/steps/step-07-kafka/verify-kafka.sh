@@ -22,7 +22,8 @@
 #           [--topic-name <name>] [--kafka-client-image <image>]
 #           [--wait-timeout <seconds>] [--help]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 

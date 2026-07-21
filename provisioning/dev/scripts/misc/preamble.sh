@@ -15,25 +15,15 @@
 #   step_start()       — mark start of a pipeline step
 #   step_end()         — mark end of a pipeline step with status
 #   START_TIME         — epoch seconds for duration computation
-#
-# Progress display: Uses sequential step logs instead of visual table.
-# Each step is logged with STARTED/DONE/FAILED status for clarity.
 
 set -euo pipefail
 
-# SCRIPT_DIR is the directory containing the calling script (via BASH_SOURCE)
+# SCRIPT_DIR is the parent directory of misc/ (i.e., provisioning/dev/scripts/)
 # BASH_SOURCE[0] is always the preamble.sh file (in misc/)
-# BASH_SOURCE[1] is the calling script
 _PREAMBLE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-# Check if we're being sourced by startup.sh
-if [[ "$(basename "${BASH_SOURCE[1]:-}")" == "startup.sh" ]]; then
-  # Sourced by startup.sh - SCRIPT_DIR is the parent of misc/ (scripts/)
-  SCRIPT_DIR="$(cd "${_PREAMBLE_DIR}/.." && pwd)"
-else
-  # Sourced from misc/ or steps/ - SCRIPT_DIR is preamble's directory
-  SCRIPT_DIR="${_PREAMBLE_DIR}"
-fi
+# SCRIPT_DIR should always be the scripts/ directory (parent of misc/)
+SCRIPT_DIR="$(cd "${_PREAMBLE_DIR}/.." && pwd)"
 
 # Common script directories
 MISC_DIR="${SCRIPT_DIR}/misc"
@@ -44,7 +34,7 @@ MISC_DIR="${SCRIPT_DIR}/misc"
 if [[ "${SCRIPT_DIR}" == */steps/* ]]; then
   PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../../.." && pwd)"
 else
-  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../../.." && pwd)"
+  PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 fi
 
 KUBECONFIG="${KUBECONFIG:-${PROJECT_ROOT}/provisioning/dev/opentofu/kubeconfig}"
@@ -104,6 +94,184 @@ STEP_END() {
       ;;
   esac
   log ""
+}
+
+# ---- Interactive prompt function ----
+trim_prompt_input() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+read_choice() {
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local prompt_text="$1"
+  local choice=""
+
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    timeout=10
+  fi
+
+  if [ "${timeout}" -gt 0 ]; then
+    if ! read -r -t "${timeout}" -p "${prompt_text}" choice; then
+      echo "" >&3
+      return 124
+    fi
+  else
+    if ! read -r -p "${prompt_text}" choice; then
+      choice=""
+    fi
+  fi
+
+  choice="$(trim_prompt_input "${choice}")"
+  printf '%s' "$choice"
+}
+
+prompt_step() {
+  local step_num=$1
+  local step_name=$2
+  local result=$3
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local max_invalid="${PROMPT_MAX_INVALID_ATTEMPTS:-3}"
+  local attempt=0
+  local choice=""
+  local prompt_text=""
+  local choice_file=""
+  local status_file=""
+  local read_status=0
+
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    timeout=10
+  fi
+
+  echo "" >&3
+  echo "========================================" >&3
+  echo "Step ${step_num}: ${step_name}" >&3
+  echo "  Status: ${result}" >&3
+  echo "========================================" >&3
+
+  if [ "$result" = "SUCCESS" ]; then
+    echo "" >&3
+    echo ">>> Verification Results:" >&3
+    # Show step-specific verification info
+    case "${step_num}" in
+      1|2)
+        echo "     Network: hpa-bridge (name: ${DEV_BRIDGE_NAME:-hpa-bridge})" >&3
+        virsh -c qemu:///system net-info "${DEV_BRIDGE_NAME:-hpa-bridge}" 2>/dev/null | grep "Active:" | head -1 | sed 's/^/     /' >&3 || echo "     Active: verified" >&3
+        echo "     Bridge CIDR: ${DEV_CIDR_BLOCK:-192.168.122.0/24}" >&3
+        ;;
+    esac
+    if [ -n "${NODE_COUNT:-}" ]; then
+      echo "     Nodes ready: ${NODE_COUNT}" >&3
+    fi
+    echo "" >&3
+    echo "========================================" >&3
+    echo "  OPTIONS:" >&3
+    echo "    E/e  - Execute next step" >&3
+    echo "    S/s  - Skip next step" >&3
+    echo "    R/r  - View recent results table" >&3
+    echo "    Q/q  - Quit script" >&3
+    echo "========================================" >&3
+
+    while true; do
+      prompt_text="Choose (E Execute/S Skip/R Results/Q Quit): "
+      choice_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-choice.XXXXXX")"
+      status_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-status.XXXXXX")"
+      if read_choice "${prompt_text}" >"${choice_file}" 2>"${status_file}"; then
+        read_status=0
+      else
+        read_status=$?
+      fi
+      choice="$(cat "${choice_file}")"
+      rm -f "${choice_file}" "${status_file}"
+
+      if [ "${read_status}" -eq 124 ]; then
+        if [ "$result" = "SUCCESS" ]; then
+          echo "No input received within ${timeout}s; defaulting to Execute next step." >&3
+          return 0
+        fi
+        echo "No input received within ${timeout}s; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit"
+      fi
+
+      case "$choice" in
+        [Ee])  return 0 ;;
+        [Ss])  return 1 ;;
+        [Rr])  show_results_table; attempt=0; continue ;;
+        [Qq])  die "User requested quit" ;;
+        "")    if [ "$result" = "SUCCESS" ]; then
+          echo "Empty choice; defaulting to Execute next step." >&3
+          return 0
+        fi
+        echo "Empty choice; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit" ;;
+        *)     attempt=$((attempt + 1))
+               if [ "${attempt}" -ge "${max_invalid}" ]; then
+                 die "Too many invalid choices; exiting"
+               fi
+               echo "Invalid choice. Please enter E, S, R, or Q." >&3 ;;
+      esac
+    done
+  else
+    echo "" >&3
+    echo ">>> Step ${step_num}: ${step_name} - FAILED!" >&3
+    echo "========================================" >&3
+    echo "  OPTIONS:" >&3
+    echo "    R/r  - View recent results table" >&3
+    echo "    Q/q  - Quit script" >&3
+    echo "========================================" >&3
+
+    while true; do
+      prompt_text="Choose (R Results/Q Quit): "
+      choice_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-choice.XXXXXX")"
+      status_file="$(mktemp "${TMPDIR:-/tmp}/hpa-prompt-status.XXXXXX")"
+      if read_choice "${prompt_text}" >"${choice_file}" 2>"${status_file}"; then
+        read_status=0
+      else
+        read_status=$?
+      fi
+      choice="$(cat "${choice_file}")"
+      rm -f "${choice_file}" "${status_file}"
+
+      if [ "${read_status}" -eq 124 ]; then
+        echo "No input received within ${timeout}s; defaulting to Quit." >&3
+        die "Step ${step_num} failed, user requested quit"
+      fi
+
+      case "$choice" in
+        [Rr])  show_results_table; attempt=0; continue ;;
+        [Qq])  die "Step ${step_num} failed, user requested quit" ;;
+        "")    echo "Empty choice; defaulting to Quit." >&3
+               die "Step ${step_num} failed, user requested quit" ;;
+        *)     attempt=$((attempt + 1))
+               if [ "${attempt}" -ge "${max_invalid}" ]; then
+                 die "Too many invalid choices; exiting"
+               fi
+               echo "Invalid choice. Please enter R or Q." >&3 ;;
+      esac
+    done
+  fi
+}
+
+
+show_results_table() {
+  echo "" >&3
+  echo "========================================" >&3
+  echo "        STEP RESULTS SUMMARY" >&3
+  echo "========================================" >&3
+  echo "" >&3
+  echo "  Step | Name                              | Status  | Details" >&3
+  echo "  -----|-----------------------------------|---------|-------" >&3
+  
+  local idx=1
+  for result in "${STEP_RESULTS[@]}"; do
+    echo "$result" >&3
+    idx=$((idx + 1))
+  done
+  
+  echo "" >&3
+  echo "========================================" >&3
 }
 
 # ---- Internet connectivity helpers ----------------------------------------

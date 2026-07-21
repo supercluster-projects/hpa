@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 # verify-workloads.sh — Welcome + Counter workload health verification
 #
 # Verifies all application workloads deployed by install-workloads.sh:

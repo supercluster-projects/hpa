@@ -172,8 +172,8 @@ fi
 # ============================================================================
 log "Phase 3/9: Creating ${BRIDGE_NAME} network"
 
-if [ -f "${SCRIPT_DIR}/steps/step-01-bridge-setup/setup-bridge.sh" ]; then
-  bash "${SCRIPT_DIR}/steps/step-01-bridge-setup/setup-bridge.sh" --bridge "${BRIDGE_NAME}" 2>&1 | while IFS= read -r line; do log "    ${line}"; done
+if [ -f "${SCRIPT_DIR}/steps/step-00-bridge-setup/setup-bridge.sh" ]; then
+  bash "${SCRIPT_DIR}/steps/step-00-bridge-setup/setup-bridge.sh" --bridge "${BRIDGE_NAME}" --host-iface "${HOST_IFACE}" 2>&1 | while IFS= read -r line; do log "    ${line}"; done
   log "  setup-bridge.sh completed"
 else
   log "  setup-bridge.sh not found at ${SCRIPT_DIR}/setup-bridge.sh"

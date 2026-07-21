@@ -15,7 +15,8 @@
 # Usage: ./verify-casdoor.sh [--kubeconfig <path>] [--namespace <ns>]
 #                            [--expected-pods <count>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Internal defaults (script-internal only) -------------------------
 NAMESPACE="casdoor"

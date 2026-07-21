@@ -163,7 +163,7 @@ main() {
   
   # Check if network exists
   if ! virsh net-list --all | grep -q "$NETWORK_NAME"; then
-    die "Network $NETWORK_NAME not found. Run steps/step-01-bridge-setup/setup-bridge.sh first."
+    die "Network $NETWORK_NAME not found. Run steps/step-00-bridge-setup/setup-bridge.sh first."
   fi
   
   # Create Ceph disks for workers if they don't exist

@@ -15,7 +15,8 @@
 #                            [--harbor-url <url>]
 #                            [--harbor-project <name>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 SEED_DIR="/media/seed-appliance"

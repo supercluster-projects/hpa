@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 # install-cilium.sh — Deploy Cilium CNI on a Talos cluster with L2 LB config
 #
 # Installs Cilium via Helm with L2 announcement and LoadBalancer IP pool

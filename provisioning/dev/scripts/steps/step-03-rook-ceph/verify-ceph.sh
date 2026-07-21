@@ -14,7 +14,8 @@
 # Usage: ./verify-ceph.sh [--kubeconfig <path>] [--expected-osds <count>]
 #                         [--expected-mons <count>] [--namespace <ns>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Defaults -------------------------------------------------------------
 

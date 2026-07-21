@@ -17,7 +17,8 @@
 #
 # Usage: ./install-security-policy.sh [--kubeconfig <path>]
 # ---------------------------------------------------------------------------
-. "../misc/preamble.sh"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "${SCRIPT_DIR}/../../misc/preamble.sh"
 
 # ---- Internal defaults (script-internal only) -------------------------
 SECURITY_POLICY_NAME="hpa-dev-security-policy"

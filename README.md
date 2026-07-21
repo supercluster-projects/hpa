@@ -21,7 +21,8 @@ provisioning/dev/scripts/
 │   ├── run-pipeline.sh     # Resilient pipeline runner
 │   └── verify-*.sh         # Verification scripts
 └── steps/                  # Pipeline step folders (numbered by execution order)
-    ├── step-01-bridge-setup/
+    ├── step-00-bridge-setup/
+    ├── step-01-provisioning/
     ├── step-02-cilium/
     ├── step-03-rook-ceph/
     ├── step-04-harbor/
@@ -111,13 +112,15 @@ Validate that your hypervisor, groups, and virtualization limits are compliant:
 bash provisioning/dev/scripts/misc/host-preflight.sh
 ```
 
-#### Step 1: Setup hpa-bridge Network
-Create the libvirt bridge network for VM communication:
+#### Step 0: Setup hpa-bridge Network
+Create the libvirt bridge network for VM communication, attach it explicitly to the host NIC, and start the local DHCP server:
 ```bash
-bash provisioning/dev/scripts/steps/step-01-bridge-setup/setup-bridge.sh
+bash provisioning/dev/scripts/steps/step-00-bridge-setup/setup-bridge.sh --host-iface enp6s0f3u1
 ```
 
-#### Step 2: Provision Talos VMs (OpenTofu Apply)
+If `--host-iface` is omitted, the script auto-detects the default outbound interface. The setup script also starts `dnsmasq` on `hpa-bridge` so Talos VMs receive deterministic DHCP leases for their static node IPs.
+
+#### Step 1: Provision Talos VMs (OpenTofu Apply)
 This is the longest step (~30-60 minutes). The startup script will prompt before starting:
 ```bash
 bash provisioning/dev/scripts/startup.sh
@@ -223,8 +226,10 @@ Choose (E Execute/S Skip/R Results/Q Quit):
 
 **Step Execution Flow:**
 1. **Steps 0-1** (Bridge setup and verification) run automatically - they're required
-2. **Step 2** (OpenTofu provisioning) prompts before starting - it can take 30-60 minutes
+2. **Step 1** (OpenTofu provisioning) prompts before starting - it can take 30-60 minutes
 3. **Subsequent steps** prompt after each completion with results
+
+Prompts have a short timeout by default (`PROMPT_TIMEOUT_SECONDS=10`) and will default to Execute after timeout. Set `PROMPT_TIMEOUT_SECONDS=0` for an unbounded interactive prompt. Invalid choices are limited by `PROMPT_MAX_INVALID_ATTEMPTS` (default: 3).
 
 **Results Table:**
 Press `R` at any prompt to view the step results summary:
@@ -286,8 +291,8 @@ This guide walks through the complete bootstrap of a 4-node Talos Kubernetes dev
 | Step | Task | Script | Notes |
 |------|------|--------|-------|
 | 0 | Run Host Pre-flight | `host-preflight.sh` | Validates host readiness |
-| 1 | Setup hpa-bridge network | `setup-bridge.sh` | Creates libvirt bridge |
-| 2 | Provision Talos VMs | `startup.sh` → `tofu apply` | ~30-60 min, prompts before start |
+| 0 | Setup hpa-bridge network | `setup-bridge.sh` | Creates libvirt bridge and DHCP |
+| 1 | Provision Talos VMs | `startup.sh` → `tofu apply` | ~30-60 min, prompts before start |
 | 2+| Seed bootstrap images | `bootstrap-harbor.sh` | Auto-runs before step 2 |
 | 3 | Install Cilium CNI | `install-cilium.sh` | eBPF networking |
 | 4 | Install Rook Ceph | `install-rook-ceph.sh` | Storage |
