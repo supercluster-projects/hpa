@@ -305,13 +305,22 @@ This guide walks through the complete bootstrap of a 4-node Talos Kubernetes dev
 
 **Note:** The `startup.sh` script provides an **interactive UI** for controlling step execution. Use `E` to execute, `S` to skip, `R` for results, or `Q` to quit.
 
+After Cilium is installed, Hubble UI is exposed as the `hubble-ui` `LoadBalancer` service. Check it with:
+
+```bash
+kubectl -n kube-system get svc hubble-ui -o wide
+curl http://<HUBBLE_UI_EXTERNAL_IP>
+```
+
+`verify-cilium.sh` will check the Hubble UI LoadBalancer IP and HTTP endpoint automatically.
+
 ### Verification Scripts
 
 | Script | Verifies | Requires Cluster? |
 |--------|----------|-------------------|
 | `verify-manifests.sh` | helm lint + kustomize build | No |
 | `verify-cluster.sh` | Core cluster health | Yes |
-| `verify-cilium.sh` | Cilium pods, LB pool, L2 policy | Yes |
+| `verify-cilium.sh` | Cilium pods, LB pool, L2 policy, Hubble UI LB/HTTP | Yes |
 | `verify-ceph.sh` | CephCluster, OSDs, StorageClass | Yes |
 | `verify-harbor.sh` | Harbor pods, PVCs, LB IP | Yes |
 | `verify-infisical.sh` | Infisical pods, Secrets Operator | Yes |
@@ -652,6 +661,7 @@ The platform implements a **Hub-and-Spoke topology** with the Management Plane (
 
 4. **Cilium CNI** - eBPF-powered networking, routing, and security with `kubeProxyReplacement=true` mode
    - L2 Announcements with `192.168.122.208/28` LB pool
+   - **Hubble UI** exposed as a Cilium `LoadBalancer` service (`hubble-ui`) for web access
    - `CiliumNodeConfig` for predictable eBPF datapath binding
 5. **Rook Ceph** - Dynamic persistent block/file storage via CSI (`ceph-rbd`) for stateful apps
 6. **Harbor** - Local secure OCI registry with vulnerability scanning and Cosign signing

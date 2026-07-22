@@ -21,21 +21,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ---- Internal defaults (script-internal only) -------------------------
 EXPECTED_NODES=4
+HUBBLE_UI_SERVICE="hubble-ui"
+HUBBLE_UI_PORT=80
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --kubeconfig)     KUBECONFIG="$2";     shift 2 ;;
     --expected-nodes) EXPECTED_NODES="$2"; shift 2 ;;
+    --hubble-ui-service) HUBBLE_UI_SERVICE="$2"; shift 2 ;;
+    --hubble-ui-port) HUBBLE_UI_PORT="$2"; shift 2 ;;
     --help|-h)
       cat >&2 <<HELP
 Usage: $(basename "$0") [options]
 
-Verify Cilium CNI health, CRD state, and agent readiness.
+Verify Cilium CNI health, CRD state, and Hubble UI access.
 
 Options:
   --kubeconfig PATH        Path to kubeconfig (default: ../opentofu/kubeconfig)
   --expected-nodes COUNT   Expected number of Cilium agent pods (default: 4)
+  --hubble-ui-service NAME Hubble UI service name (default: hubble-ui)
+  --hubble-ui-port PORT    Hubble UI service port (default: 80)
   --help, -h               Show this help message
 HELP
       exit 0
@@ -50,6 +56,8 @@ export KUBECONFIG
 log "verify-cilium: starting"
 log "  kubeconfig:      ${KUBECONFIG}"
 log "  expected nodes:  ${EXPECTED_NODES}"
+log "  hubble-ui-svc:   ${HUBBLE_UI_SERVICE}"
+log "  hubble-ui-port:  ${HUBBLE_UI_PORT}"
 
 command -v kubectl >/dev/null 2>&1 || die "kubectl not found in PATH"
 [ -f "${KUBECONFIG}" ] || die "kubeconfig not found at ${KUBECONFIG}"
@@ -75,6 +83,13 @@ PHASE4_STATUS=""  # L2 policy
 PHASE4_DETAIL=""
 PHASE5_STATUS=""  # cilium status (optional)
 PHASE5_DETAIL=""
+PHASE6_STATUS=""  # Hubble UI service LB IP
+PHASE6_DETAIL=""
+PHASE7_STATUS=""  # Hubble UI HTTP endpoint
+PHASE7_DETAIL=""
+
+CURL_AVAILABLE=0
+command -v curl >/dev/null 2>&1 && CURL_AVAILABLE=1
 
 OVERALL_FAILED=0
 
@@ -233,7 +248,65 @@ else
 fi
 
 # ============================================================================
-# Summary Table (stdout)
+# Phase 6: Hubble UI LoadBalancer service
+# ============================================================================
+log "Phase 6: Checking Hubble UI LoadBalancer service"
+HUBBLE_UI_SVC_JSON=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${HELM_NAMESPACE:-kube-system}" get svc "${HUBBLE_UI_SERVICE}" -o json 2>&1) \
+  || { err "kubectl get hubble-ui service failed: ${HUBBLE_UI_SVC_JSON}"; PHASE6_STATUS="FAIL"; PHASE6_DETAIL="kubectl error"; OVERALL_FAILED=1; }
+
+if [ -z "${PHASE6_STATUS}" ]; then
+  HUBBLE_UI_EXTERNAL_IP=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${HELM_NAMESPACE:-kube-system}" get svc "${HUBBLE_UI_SERVICE}" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+  if [ -z "${HUBBLE_UI_EXTERNAL_IP}" ]; then
+    HUBBLE_UI_EXTERNAL_IP=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${HELM_NAMESPACE:-kube-system}" get svc "${HUBBLE_UI_SERVICE}" -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+  fi
+
+  if [ -n "${HUBBLE_UI_EXTERNAL_IP}" ]; then
+    PHASE6_STATUS="PASS"
+    PHASE6_DETAIL="EXTERNAL-IP=${HUBBLE_UI_EXTERNAL_IP}"
+    log "Phase 6: ${PHASE6_DETAIL} — PASSED"
+  else
+    PHASE6_STATUS="WARN"
+    PHASE6_DETAIL="service exists but external IP/hostname is not assigned yet"
+    log "Phase 6: ${PHASE6_DETAIL} — WARN (waiting for Cilium L2 LB)"
+  fi
+fi
+
+# ============================================================================
+# Phase 7: Hubble UI HTTP endpoint
+# ============================================================================
+log "Phase 7: Checking Hubble UI HTTP endpoint"
+if [ "${CURL_AVAILABLE}" -ne 1 ]; then
+  PHASE7_STATUS="SKIP"
+  PHASE7_DETAIL="curl not available"
+  log "Phase 7: ${PHASE7_DETAIL} — SKIPPED"
+elif [ -z "${HUBBLE_UI_EXTERNAL_IP}" ]; then
+  PHASE7_STATUS="SKIP"
+  PHASE7_DETAIL="no external IP/hostname yet"
+  log "Phase 7: ${PHASE7_DETAIL} — SKIPPED (waiting for LB)"
+elif echo "${HUBBLE_UI_EXTERNAL_IP}" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
+  HUBBLE_UI_URL="http://${HUBBLE_UI_EXTERNAL_IP}:${HUBBLE_UI_PORT}"
+  HUBBLE_UI_HTTP_CODE=$(curl -k -s -o /tmp/hubble-ui-verify.out -w '%{http_code}' --connect-timeout 5 --max-time 10 "${HUBBLE_UI_URL}" 2>&1 || true)
+  if [ "${HUBBLE_UI_HTTP_CODE}" = "200" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "301" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "302" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "307" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "308" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "401" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "403" ] || [ "${HUBBLE_UI_HTTP_CODE}" = "404" ]; then
+    PHASE7_STATUS="PASS"
+    PHASE7_DETAIL="HTTP ${HUBBLE_UI_HTTP_CODE}"
+    log "Phase 7: ${PHASE7_DETAIL} — PASSED"
+  elif [ -n "${HUBBLE_UI_HTTP_CODE}" ]; then
+    PHASE7_STATUS="FAIL"
+    PHASE7_DETAIL="HTTP ${HUBBLE_UI_HTTP_CODE}"
+    err "Hubble UI endpoint returned unexpected HTTP status ${HUBBLE_UI_HTTP_CODE}"
+    OVERALL_FAILED=1
+  else
+    PHASE7_STATUS="FAIL"
+    PHASE7_DETAIL="curl failed"
+    err "Hubble UI endpoint is unreachable: ${HUBBLE_UI_SVC_JSON}"
+    OVERALL_FAILED=1
+  fi
+else
+  PHASE7_STATUS="WARN"
+  PHASE7_DETAIL="hostname ingress ${HUBBLE_UI_EXTERNAL_IP} (manual DNS required)"
+  log "Phase 7: ${PHASE7_DETAIL} — WARN"
+fi
+
 # ============================================================================
 OVERALL_VERDICT="PASS"
 [ "${OVERALL_FAILED}" -ne 0 ] && OVERALL_VERDICT="FAIL"
@@ -247,6 +320,8 @@ printf "%-10s %-12s %-40s\n" "2-Count"   "${PHASE2_STATUS}" "${PHASE2_DETAIL}"
 printf "%-10s %-12s %-40s\n" "3-LB-Pool" "${PHASE3_STATUS}" "${PHASE3_DETAIL}"
 printf "%-10s %-12s %-40s\n" "4-L2-Pol"  "${PHASE4_STATUS}" "${PHASE4_DETAIL}"
 printf "%-10s %-12s %-40s\n" "5-CLI"     "${PHASE5_STATUS}" "${PHASE5_DETAIL}"
+printf "%-10s %-12s %-40s\n" "6-Hubble"  "${PHASE6_STATUS}" "${PHASE6_DETAIL}"
+printf "%-10s %-12s %-40s\n" "7-HTTP"    "${PHASE7_STATUS}" "${PHASE7_DETAIL}"
 echo "=========================================="
 printf "Overall verdict: %s\n" "${OVERALL_VERDICT}"
 echo "=========================================="
