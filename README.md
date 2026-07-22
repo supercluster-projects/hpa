@@ -183,6 +183,9 @@ The bootstrap process handles caching intelligently:
 
 Once `startup.sh` completes:
 
+- `startup.sh` prints the discovered exposed component URLs, including Hubble UI, Gateway/Headlamp, Harbor, Infisical, Casdoor, and any ready Knative welcome route.
+- LoadBalancer IPs may still show `<pending/not installed>` until Helm workloads have assigned external addresses.
+
 #### Verify Kubernetes Node Health
 ```bash
 bash provisioning/dev/scripts/verify-cluster.sh --kubeconfig provisioning/dev/opentofu/kubeconfig

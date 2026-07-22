@@ -414,6 +414,70 @@ fi
 
 prompt_step 5 "Install Cilium CNI" "SUCCESS"
 
+# ---- Exposed components summary ------------------------------------------
+get_lb_ingress() {
+  local namespace="$1"
+  local service="$2"
+  local ip=""
+  local hostname=""
+
+  ip=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${namespace}" get svc "${service}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+  hostname=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${namespace}" get svc "${service}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
+
+  printf '%s' "${ip:-${hostname}}"
+}
+
+print_url_component() {
+  local name="$1"
+  local url="$2"
+
+  if [ -n "${url}" ]; then
+    log_step "  ${name}: ${url}"
+  else
+    log_step "  ${name}: <pending/not installed>"
+  fi
+}
+
+print_exposed_components() {
+  log_step ""
+  log_step "=========================================================="
+  log_step "Exposed Cluster Components"
+  log_step "=========================================================="
+  log_step ""
+
+  if ! kubectl --kubeconfig "${KUBECONFIG}" get nodes >/dev/null 2>&1; then
+    log_step "  Kubernetes API is not reachable from ${KUBECONFIG}; skipping discovery."
+    log_step ""
+    return
+  fi
+
+  local hubble_ip=""
+  local gateway_ip=""
+
+  hubble_ip=$(get_lb_ingress "${HELM_NAMESPACE:-kube-system}" "${HUBBLE_UI_SERVICE:-hubble-ui}")
+  print_url_component "Hubble UI" "http://${hubble_ip}/"
+
+  gateway_ip=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${DEV_GATEWAY_NAMESPACE}" get gateway "${DEV_GATEWAY_NAME}" \
+    -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || true)
+  if [ -z "${gateway_ip}" ]; then
+    gateway_ip=$(get_lb_ingress "${DEV_GATEWAY_NAMESPACE}" "envoy-gateway-proxy")
+  fi
+  print_url_component "Envoy Gateway / Headlamp" "http://${gateway_ip}/"
+
+  print_url_component "Harbor" "http://$(get_lb_ingress harbor harbor)/"
+  print_url_component "Infisical" "http://$(get_lb_ingress infisical infisical)/"
+  print_url_component "Casdoor" "http://$(get_lb_ingress casdoor casdoor):8000"
+
+  local welcome_url=""
+  welcome_url=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${DEV_WORKLOADS_NAMESPACE}" get ksvc welcome \
+    -o jsonpath='{.status.url}' 2>/dev/null || true)
+  print_url_component "Knative Welcome route" "${welcome_url}"
+
+  log_step ""
+}
+
 # ---- Summary --------------------------------------------------------------
 log_step ""
 log_step "=========================================================="
@@ -430,5 +494,7 @@ log_step ""
 log_step "  Cleanup:"
 log_step "    ./cleanup.sh"
 log_step "=========================================================="
+
+print_exposed_components
 
 show_results_table
