@@ -117,7 +117,7 @@ prompt_step() {
   echo "  Status: ${result}" >&3
   echo "========================================" >&3
 
-  if [ "$result" = "SUCCESS" ]; then
+  if [ "$result" = "SUCCESS" ] || [ "$result" = "SKIPPED" ]; then
     echo "" >&3
     echo ">>> Verification Results:" >&3
     # Show step-specific verification info
@@ -153,7 +153,7 @@ prompt_step() {
       rm -f "${choice_file}" "${status_file}"
 
       if [ "${read_status}" -eq 124 ]; then
-        if [ "$result" = "SUCCESS" ]; then
+        if [ "$result" = "SUCCESS" ] || [ "$result" = "SKIPPED" ]; then
           echo "No input received within ${timeout}s; defaulting to Execute next step." >&3
           return 0
         fi
@@ -166,7 +166,7 @@ prompt_step() {
         [Ss])  return 1 ;;
         [Rr])  show_results_table; attempt=0; continue ;;
         [Qq])  die "User requested quit" ;;
-        "")    if [ "$result" = "SUCCESS" ]; then
+        "")    if [ "$result" = "SUCCESS" ] || [ "$result" = "SKIPPED" ]; then
           echo "Empty choice; defaulting to Execute next step." >&3
           return 0
         fi
@@ -287,6 +287,7 @@ Pipeline steps:
   23. Install AlertManager
   24. Configure TLS + Routes
   25. Seed hydration (offline images to Harbor) [SKIP if SEED_DIR unset]
+  26. Install CouchDB
 
 Environment:
   .env file at project root sourced automatically
@@ -392,27 +393,241 @@ add_step_result 3 "Verify cluster nodes" "SUCCESS" "${NODE_COUNT} nodes ready"
 # Prompt for next step
 prompt_step 4 "Install Cilium CNI" "SUCCESS"
 
+# ---- Step 3+: Install remaining components --------------------------------
+run_install_verify_step() {
+  local step_num="$1"
+  local step_name="$2"
+  local install_script="$3"
+  local verify_script="$4"
+  local prompt_name="$5"
+  local install_status="SKIP"
+  local verify_status="SKIP"
+  local result="SUCCESS"
+
+  CURRENT_STEP_NUM="$step_num"
+  step_start "$step_name"
+
+  if [ -n "${install_script}" ] && [ -f "${install_script}" ]; then
+    if bash "${install_script}" 2>&1; then
+      install_status="SUCCESS"
+    else
+      install_status="FAILED"
+      result="FAILED"
+      log_step "WARNING: ${step_name} install failed"
+    fi
+  else
+    log_step "WARNING: install script not found: ${install_script:-<none>}"
+    result="FAILED"
+  fi
+
+  if [ -n "${verify_script}" ] && [ -f "${verify_script}" ]; then
+    if bash "${verify_script}" 2>&1; then
+      verify_status="SUCCESS"
+    else
+      verify_status="FAILED"
+      result="FAILED"
+      log_step "WARNING: ${step_name} verification failed"
+    fi
+  fi
+
+  step_end "$result"
+  add_step_result "$CURRENT_STEP_NUM" "$step_name" "$result" "install=${install_status}; verify=${verify_status}"
+
+  if [ "${step_num}" -lt 26 ]; then
+    prompt_step "$((step_num + 1))" "$prompt_name" "$result"
+  fi
+}
+
+run_seed_hydration_step() {
+  local step_num=25
+  local result="SUCCESS"
+  local install_status="SUCCESS"
+
+  CURRENT_STEP_NUM="$step_num"
+  step_start "Seed hydration"
+
+  if [ -z "${SEED_DIR:-}" ]; then
+    log_step "  SEED_DIR is unset; skipping seed hydration."
+    step_end "SKIPPED"
+    add_step_result "$CURRENT_STEP_NUM" "Seed hydration" "SKIPPED" "SEED_DIR unset"
+    prompt_step "$((step_num + 1))" "Seed hydration" "SKIPPED"
+    return
+  fi
+
+  if [ -f "${SCRIPT_DIR}/steps/step-25-seed-hydration/hydrate-tofu.sh" ]; then
+    if bash "${SCRIPT_DIR}/steps/step-25-seed-hydration/hydrate-tofu.sh" \
+      --seed-dir "${SEED_DIR}" \
+      --tofu-dir "${SCRIPT_DIR}/../opentofu" 2>&1; then
+      log_step "  hydrate-tofu: SUCCESS"
+    else
+      log_step "  hydrate-tofu: FAILED"
+      result="FAILED"
+    fi
+  fi
+
+  if [ -f "${SCRIPT_DIR}/steps/step-25-seed-hydration/hydrate-harbor.sh" ]; then
+    if bash "${SCRIPT_DIR}/steps/step-25-seed-hydration/hydrate-harbor.sh" \
+      --kubeconfig "${KUBECONFIG}" \
+      --seed-dir "${SEED_DIR}" \
+      --harbor-project "${DEV_HARBOR_PROJECT:-library}" 2>&1; then
+      log_step "  hydrate-harbor: SUCCESS"
+    else
+      log_step "  hydrate-harbor: FAILED"
+      result="FAILED"
+    fi
+  fi
+
+  step_end "$result"
+  add_step_result "$CURRENT_STEP_NUM" "Seed hydration" "$result" "install=${install_status}"
+  prompt_step "$((step_num + 1))" "Seed hydration" "$result"
+}
+
 # ---- Step 3: Install Cilium CNI --------------------------------------------
-CURRENT_STEP_NUM=3
-step_start "Install Cilium CNI"
+run_install_verify_step 3 "Install Cilium CNI" \
+  "${SCRIPT_DIR}/steps/step-02-cilium/install-cilium.sh" \
+  "${SCRIPT_DIR}/steps/step-02-cilium/verify-cilium.sh" \
+  "Install Cilium CNI"
 
-if bash "${SCRIPT_DIR}/steps/step-02-cilium/install-cilium.sh" 2>&1; then
-  step_end "DONE"
-  add_step_result $CURRENT_STEP_NUM "Install Cilium CNI" "SUCCESS"
-else
-  log_step "WARNING: Cilium install returned non-zero"
-  step_end "DONE"
-  add_step_result $CURRENT_STEP_NUM "Install Cilium CNI" "SUCCESS"
-fi
+# ---- Step 4: Install Rook Ceph --------------------------------------------
+run_install_verify_step 4 "Install Rook Ceph" \
+  "${SCRIPT_DIR}/steps/step-03-rook-ceph/install-rook-ceph.sh" \
+  "${SCRIPT_DIR}/steps/step-03-rook-ceph/verify-ceph.sh" \
+  "Install Rook Ceph"
 
-# Verify cilium
-if bash "${SCRIPT_DIR}/steps/step-02-cilium/verify-cilium.sh" 2>&1; then
-  add_step_result $CURRENT_STEP_NUM "Verify Cilium CNI" "SUCCESS"
-else
-  add_step_result $CURRENT_STEP_NUM "Verify Cilium CNI" "FAILED"
-fi
+# ---- Step 5: Install Harbor ------------------------------------------------
+run_install_verify_step 5 "Install Harbor" \
+  "${SCRIPT_DIR}/steps/step-04-harbor/install-harbor.sh" \
+  "${SCRIPT_DIR}/steps/step-04-harbor/verify-harbor.sh" \
+  "Install Harbor"
 
-prompt_step 5 "Install Cilium CNI" "SUCCESS"
+# ---- Step 6: Install Infisical --------------------------------------------
+run_install_verify_step 6 "Install Infisical" \
+  "${SCRIPT_DIR}/steps/step-05-infisical/install-infisical.sh" \
+  "${SCRIPT_DIR}/steps/step-05-infisical/verify-infisical.sh" \
+  "Install Infisical"
+
+# ---- Step 7: Install Runtimes ---------------------------------------------
+run_install_verify_step 7 "Install Runtimes" \
+  "${SCRIPT_DIR}/steps/step-06-runtimes/install-runtimes.sh" \
+  "${SCRIPT_DIR}/steps/step-06-runtimes/verify-runtimes.sh" \
+  "Install Runtimes"
+
+# ---- Step 8: Install Kafka --------------------------------------------------
+run_install_verify_step 8 "Install Kafka" \
+  "${SCRIPT_DIR}/steps/step-07-kafka/install-kafka.sh" \
+  "${SCRIPT_DIR}/steps/step-07-kafka/verify-kafka.sh" \
+  "Install Kafka"
+
+# ---- Step 9: Install Spegel -------------------------------------------------
+run_install_verify_step 9 "Install Spegel" \
+  "${SCRIPT_DIR}/steps/step-08-spegel/install-spegel.sh" \
+  "${SCRIPT_DIR}/steps/step-08-spegel/verify-spegel.sh" \
+  "Install Spegel"
+
+# ---- Step 10: Install Casdoor ----------------------------------------------
+run_install_verify_step 10 "Install Casdoor" \
+  "${SCRIPT_DIR}/steps/step-09-casdoor/install-casdoor.sh" \
+  "${SCRIPT_DIR}/steps/step-09-casdoor/verify-casdoor.sh" \
+  "Install Casdoor"
+
+# ---- Step 11: Install Casbin ------------------------------------------------
+run_install_verify_step 11 "Install Casbin" \
+  "${SCRIPT_DIR}/steps/step-10-casbin/install-casbin.sh" \
+  "${SCRIPT_DIR}/steps/step-10-casbin/verify-casbin.sh" \
+  "Install Casbin"
+
+# ---- Step 12: Install Envoy Gateway / Headlamp -----------------------------
+run_install_verify_step 12 "Install Envoy Gateway / Headlamp" \
+  "${SCRIPT_DIR}/steps/step-11-gateway/install-gateway.sh" \
+  "${SCRIPT_DIR}/steps/step-11-gateway/verify-gateway.sh" \
+  "Install Envoy Gateway / Headlamp"
+
+# ---- Step 13: Install SecurityPolicy ---------------------------------------
+run_install_verify_step 13 "Install SecurityPolicy" \
+  "${SCRIPT_DIR}/steps/step-12-security-policy/install-security-policy.sh" \
+  "${SCRIPT_DIR}/steps/step-12-security-policy/verify-security-policy.sh" \
+  "Install SecurityPolicy"
+
+# ---- Step 14: Install GitOps -----------------------------------------------
+run_install_verify_step 14 "Install GitOps" \
+  "${SCRIPT_DIR}/steps/step-13-gitops/install-gitops.sh" \
+  "${SCRIPT_DIR}/steps/step-13-gitops/verify-gitops.sh" \
+  "Install GitOps"
+
+# ---- Step 15: Install Workloads --------------------------------------------
+run_install_verify_step 15 "Install Workloads" \
+  "${SCRIPT_DIR}/steps/step-14-workloads/install-workloads.sh" \
+  "${SCRIPT_DIR}/steps/step-14-workloads/verify-workloads.sh" \
+  "Install Workloads"
+
+# ---- Step 16: Install Streaming Workload -----------------------------------
+run_install_verify_step 16 "Install Streaming Workload" \
+  "${SCRIPT_DIR}/steps/step-15-workload-streaming/install-streaming-workload.sh" \
+  "${SCRIPT_DIR}/steps/step-15-workload-streaming/verify-streaming-workload.sh" \
+  "Install Streaming Workload"
+
+# ---- Step 17: Bootstrap Infisical Workloads --------------------------------
+run_install_verify_step 17 "Bootstrap Infisical Workloads" \
+  "${SCRIPT_DIR}/steps/step-16-infisical/bootstrap-infisical-workloads.sh" \
+  "${SCRIPT_DIR}/steps/step-16-infisical/verify-infisical-workloads.sh" \
+  "Bootstrap Infisical Workloads"
+
+# ---- Step 18: Install Yugabytedb -------------------------------------------
+run_install_verify_step 18 "Install Yugabytedb" \
+  "${SCRIPT_DIR}/steps/step-17-yugabytedb/install-yugabytedb.sh" \
+  "${SCRIPT_DIR}/steps/step-17-yugabytedb/verify-yugabytedb.sh" \
+  "Install Yugabytedb"
+
+# ---- Step 19: Install Hasura ------------------------------------------------
+run_install_verify_step 19 "Install Hasura" \
+  "${SCRIPT_DIR}/steps/step-18-hasura/install-hasura.sh" \
+  "${SCRIPT_DIR}/steps/step-18-hasura/verify-hasura.sh" \
+  "Install Hasura"
+
+# ---- Step 20: Install VMSingle ---------------------------------------------
+run_install_verify_step 20 "Install VMSingle" \
+  "${SCRIPT_DIR}/steps/step-19-metrics/install-vm-single.sh" \
+  "${SCRIPT_DIR}/steps/step-19-metrics/verify-vm.sh" \
+  "Install VMSingle"
+
+# ---- Step 21: Install vmagent ----------------------------------------------
+run_install_verify_step 21 "Install vmagent" \
+  "${SCRIPT_DIR}/steps/step-20-vmagent/install-vmagent.sh" \
+  "" \
+  "Install vmagent"
+
+# ---- Step 22: Install kube-state-metrics -----------------------------------
+run_install_verify_step 22 "Install kube-state-metrics" \
+  "${SCRIPT_DIR}/steps/step-21-kube-state-metrics/install-kube-state-metrics.sh" \
+  "" \
+  "Install kube-state-metrics"
+
+# ---- Step 23: Install Grafana ----------------------------------------------
+run_install_verify_step 23 "Install Grafana" \
+  "${SCRIPT_DIR}/steps/step-22-grafana/install-grafana.sh" \
+  "${SCRIPT_DIR}/steps/step-22-grafana/verify-grafana.sh" \
+  "Install Grafana"
+
+# ---- Step 24: Install Alertmanager -----------------------------------------
+run_install_verify_step 24 "Install Alertmanager" \
+  "${SCRIPT_DIR}/steps/step-23-alertmanager/install-alertmanager.sh" \
+  "${SCRIPT_DIR}/steps/step-23-alertmanager/verify-observability.sh" \
+  "Install Alertmanager"
+
+# ---- Step 24: Install TLS routes -------------------------------------------
+run_install_verify_step 25 "Install TLS routes" \
+  "${SCRIPT_DIR}/steps/step-24-tls/install-tls.sh" \
+  "${SCRIPT_DIR}/steps/step-24-tls/verify-tls.sh" \
+  "Install TLS routes"
+
+# ---- Step 25: Seed hydration -----------------------------------------------
+run_seed_hydration_step
+
+# ---- Step 26: Install CouchDB ----------------------------------------------
+run_install_verify_step 26 "Install CouchDB" \
+  "${SCRIPT_DIR}/steps/step-26-couchdb/install-couchdb.sh" \
+  "${SCRIPT_DIR}/steps/step-26-couchdb/verify-couchdb.sh" \
+  "Install CouchDB"
 
 # ---- Exposed components summary ------------------------------------------
 get_lb_ingress() {
