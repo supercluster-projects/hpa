@@ -440,6 +440,50 @@ print_url_component() {
   fi
 }
 
+component_table_value() {
+  local value="$1"
+
+  if [ -n "${value}" ]; then
+    printf '%s' "${value}"
+  else
+    printf '<pending>'
+  fi
+}
+
+get_exposed_component_details() {
+  local hubble_ip=""
+  local gateway_ip=""
+  local harbor_ip=""
+  local infisical_ip=""
+  local casdoor_ip=""
+  local welcome_url=""
+
+  if ! kubectl --kubeconfig "${KUBECONFIG}" get nodes >/dev/null 2>&1; then
+    printf '%s' "Kubernetes API unavailable"
+    return
+  fi
+
+  hubble_ip=$(get_lb_ingress "${HELM_NAMESPACE:-kube-system}" "${HUBBLE_UI_SERVICE:-hubble-ui}")
+  gateway_ip=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${DEV_GATEWAY_NAMESPACE}" get gateway "${DEV_GATEWAY_NAME}" \
+    -o jsonpath='{.status.addresses[0].value}' 2>/dev/null || true)
+  if [ -z "${gateway_ip}" ]; then
+    gateway_ip=$(get_lb_ingress "${DEV_GATEWAY_NAMESPACE}" "envoy-gateway-proxy")
+  fi
+  harbor_ip=$(get_lb_ingress harbor harbor)
+  infisical_ip=$(get_lb_ingress infisical infisical)
+  casdoor_ip=$(get_lb_ingress casdoor casdoor)
+  welcome_url=$(kubectl --kubeconfig "${KUBECONFIG}" -n "${DEV_WORKLOADS_NAMESPACE}" get ksvc welcome \
+    -o jsonpath='{.status.url}' 2>/dev/null || true)
+
+  printf 'Hubble UI=%s; Envoy=%s; Harbor=%s; Infisical=%s; Casdoor=%s:8000; Welcome=%s' \
+    "$(component_table_value "${hubble_ip}")" \
+    "$(component_table_value "${gateway_ip}")" \
+    "$(component_table_value "${harbor_ip}")" \
+    "$(component_table_value "${infisical_ip}")" \
+    "$(component_table_value "${casdoor_ip}")" \
+    "$(component_table_value "${welcome_url}")"
+}
+
 print_exposed_components() {
   log_step ""
   log_step "=========================================================="
@@ -496,5 +540,8 @@ log_step "    ./cleanup.sh"
 log_step "=========================================================="
 
 print_exposed_components
+
+EXPOSED_COMPONENTS_TABLE_DETAIL="$(get_exposed_component_details)"
+echo "  Exposed Components | INFO | ${EXPOSED_COMPONENTS_TABLE_DETAIL}" >&3
 
 show_results_table
