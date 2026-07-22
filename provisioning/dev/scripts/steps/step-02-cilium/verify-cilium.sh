@@ -23,6 +23,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EXPECTED_NODES=4
 HUBBLE_UI_SERVICE="hubble-ui"
 HUBBLE_UI_PORT=80
+VERIFY_WAIT_TIMEOUT=1800
+VERIFY_POLL_INTERVAL=15
 
 # ---- CLI Overrides --------------------------------------------------------
 while [[ $# -gt 0 ]]; do
@@ -31,6 +33,8 @@ while [[ $# -gt 0 ]]; do
     --expected-nodes) EXPECTED_NODES="$2"; shift 2 ;;
     --hubble-ui-service) HUBBLE_UI_SERVICE="$2"; shift 2 ;;
     --hubble-ui-port) HUBBLE_UI_PORT="$2"; shift 2 ;;
+    --wait-timeout) VERIFY_WAIT_TIMEOUT="$2"; shift 2 ;;
+    --poll-interval) VERIFY_POLL_INTERVAL="$2"; shift 2 ;;
     --help|-h)
       cat >&2 <<HELP
 Usage: $(basename "$0") [options]
@@ -42,6 +46,8 @@ Options:
   --expected-nodes COUNT   Expected number of Cilium agent pods (default: 4)
   --hubble-ui-service NAME Hubble UI service name (default: hubble-ui)
   --hubble-ui-port PORT    Hubble UI service port (default: 80)
+  --wait-timeout SEC       Seconds to wait for Cilium readiness (default: 1800)
+  --poll-interval SEC      Seconds between readiness checks (default: 15)
   --help, -h               Show this help message
 HELP
       exit 0
@@ -58,6 +64,11 @@ log "  kubeconfig:      ${KUBECONFIG}"
 log "  expected nodes:  ${EXPECTED_NODES}"
 log "  hubble-ui-svc:   ${HUBBLE_UI_SERVICE}"
 log "  hubble-ui-port:  ${HUBBLE_UI_PORT}"
+log "  wait-timeout:    ${VERIFY_WAIT_TIMEOUT}s"
+log "  poll-interval:   ${VERIFY_POLL_INTERVAL}s"
+
+[[ "${VERIFY_WAIT_TIMEOUT}" =~ ^[0-9]+$ ]] || die "VERIFY_WAIT_TIMEOUT must be numeric"
+[[ "${VERIFY_POLL_INTERVAL}" =~ ^[0-9]+$ ]] || die "VERIFY_POLL_INTERVAL must be numeric"
 
 command -v kubectl >/dev/null 2>&1 || die "kubectl not found in PATH"
 [ -f "${KUBECONFIG}" ] || die "kubeconfig not found at ${KUBECONFIG}"
@@ -92,6 +103,76 @@ CURL_AVAILABLE=0
 command -v curl >/dev/null 2>&1 && CURL_AVAILABLE=1
 
 OVERALL_FAILED=0
+
+get_hubble_ui_ingress() {
+  kubectl --kubeconfig "${KUBECONFIG}" -n "${HELM_NAMESPACE:-kube-system}" get svc "${HUBBLE_UI_SERVICE}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true
+}
+
+get_hubble_ui_hostname() {
+  kubectl --kubeconfig "${KUBECONFIG}" -n "${HELM_NAMESPACE:-kube-system}" get svc "${HUBBLE_UI_SERVICE}" \
+    -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true
+}
+
+get_cilium_agent_ready_count() {
+  kubectl --kubeconfig "${KUBECONFIG}" -n kube-system get pods -l k8s-app=cilium \
+    --no-headers 2>/dev/null | awk '
+      { split($2, ready, "/"); total += 1; if (ready[1] == ready[2] && $3 == "Running") ready_count += 1 }
+      END { printf "%d/%d", ready_count, total }
+    ' 2>/dev/null || echo "0/0"
+}
+
+wait_for_cilium_readiness() {
+  local deadline=$((SECONDS + VERIFY_WAIT_TIMEOUT))
+  local wait_status=1
+
+  log "Waiting up to ${VERIFY_WAIT_TIMEOUT}s for Cilium CNI and L2 LB resources to become ready..."
+
+  while [ "${SECONDS}" -lt "${deadline}" ]; do
+    local agents_ready=""
+    local pool_ready="missing"
+    local policy_ready="missing"
+    local hubble_ready="pending"
+    local hubble_ip=""
+    local hubble_hostname=""
+
+    agents_ready=$(get_cilium_agent_ready_count)
+    if kubectl --kubeconfig "${KUBECONFIG}" get ciliumloadbalancerippool hpa-dev-lb-pool >/dev/null 2>&1; then
+      pool_ready="ready"
+    fi
+    if kubectl --kubeconfig "${KUBECONFIG}" get ciliuml2announcementpolicy hpa-dev-l2-policy >/dev/null 2>&1; then
+      policy_ready="ready"
+    fi
+    hubble_ip=$(get_hubble_ui_ingress)
+    hubble_hostname=$(get_hubble_ui_hostname)
+    if [ -n "${hubble_ip}" ] || [ -n "${hubble_hostname}" ]; then
+      hubble_ready="ready"
+    fi
+
+    log "  wait snapshot: agents=${agents_ready}; pool=${pool_ready}; policy=${policy_ready}; Hubble=${hubble_ready}"
+
+    if [[ "${agents_ready}" =~ ^[0-9]+/[0-9]+$ ]] \
+      && [ "${agents_ready%%/*}" -eq "${agents_ready##*/}" ] \
+      && [ "${agents_ready%%/*}" -eq "${EXPECTED_NODES}" ] \
+      && [ "${pool_ready}" = "ready" ] \
+      && [ "${policy_ready}" = "ready" ] \
+      && [ "${hubble_ready}" = "ready" ]; then
+      wait_status=0
+      break
+    fi
+
+    sleep "${VERIFY_POLL_INTERVAL}"
+  done
+
+  if [ "${wait_status}" -ne 0 ]; then
+    err "Cilium did not become fully ready within ${VERIFY_WAIT_TIMEOUT}s"
+    return 1
+  fi
+
+  log "Cilium CNI and L2 LB resources are ready."
+}
+
+wait_for_cilium_readiness || die "Cilium readiness wait failed"
 
 # ============================================================================
 # Phase 1: Cilium agent pod health
