@@ -118,7 +118,7 @@ Create the libvirt bridge network for VM communication, attach it explicitly to 
 bash provisioning/dev/scripts/steps/step-00-bridge-setup/setup-bridge.sh --host-iface enp6s0f3u1
 ```
 
-If `--host-iface` is omitted, the script auto-detects the default outbound interface. The setup script also starts `dnsmasq` on `hpa-bridge` so Talos VMs receive deterministic DHCP leases for their static node IPs.
+If `--host-iface` is omitted, the script auto-detects the default outbound interface. The setup script also starts `dnsmasq` on `hpa-bridge` so Talos VMs receive deterministic DHCP leases for their static node IPs. dnsmasq forwards DNS to the host resolver, and the script enables host IP forwarding plus NAT/forwarding rules so VMs can reach the internet for Talos/Kubernetes image pulls.
 
 #### Step 1: Provision Talos VMs (OpenTofu Apply)
 This is the longest step (~30-60 minutes). The startup script will prompt before starting:
@@ -635,7 +635,7 @@ The platform implements a **Hub-and-Spoke topology** with the Management Plane (
   │          │ /dev/vdb │ /dev/vdb │ /dev/vdb │  ← Ceph OSD disks
   └──────────┴──────────┴──────────┴──────────┘
        └────── hpa-bridge (192.168.122.0/24) ──────┘
-              NAT forwarding via libvirt
+              NAT forwarding via host iptables
 ```
 
 ---

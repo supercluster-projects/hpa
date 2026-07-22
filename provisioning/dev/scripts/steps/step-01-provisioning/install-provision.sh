@@ -125,8 +125,11 @@ except Exception as e:
   
   # Extract kubeconfig
   if [ -f "${TFDIR}/kubeconfig" ]; then
-    local kubeconfig_dest="${KUBECONFIG:-${PROJECT_ROOT}/kubeconfig}"
-    cp "${TFDIR}/kubeconfig" "${kubeconfig_dest}"
+    kubeconfig_dest="${KUBECONFIG:-${PROJECT_ROOT}/kubeconfig}"
+    if [ "${kubeconfig_dest}" != "${TFDIR}/kubeconfig" ]; then
+      mkdir -p "$(dirname "${kubeconfig_dest}")"
+      cp "${TFDIR}/kubeconfig" "${kubeconfig_dest}"
+    fi
 
     log_step "Kubeconfig saved to ${kubeconfig_dest}"
   fi

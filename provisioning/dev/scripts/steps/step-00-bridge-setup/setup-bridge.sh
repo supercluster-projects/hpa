@@ -22,7 +22,8 @@ BRIDGE="${DEV_BRIDGE_NAME}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --bridge)       BRIDGE="$2"; shift 2 ;;
-    *)              echo "[$(date +%Y-%m-%d %H:%M:%S)] ERROR: Unknown argument: $1" >&2; exit 1 ;;
+    --host-iface)   HOST_IFACE="$2"; shift 2 ;;
+    *)              echo "[$(date '+%Y-%m-%d %H:%M:%S')] ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -257,7 +258,7 @@ dhcp-leasefile=${DNSMASQ_LEASES}
 pid-file=${DNSMASQ_PID}
 log-dhcp
 log-facility=${DNSMASQ_LOG}
-no-resolv
+resolv-file=/run/systemd/resolve/resolv.conf
 ${RANGE_ARGS}
 ${HOST_LINES}
 EOF_CONF
@@ -326,6 +327,24 @@ SYSEOF
 else
   echo "[$(date +%H:%M:%S)] bridge-nf-call-iptables already disabled." >&2
 fi
+
+CONFIGURE_HOST_NAT() {
+  local OUT_IFACE
+  OUT_IFACE="$(ip route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i == "dev") {print $(i+1); exit}}' 2>/dev/null || true)"
+
+  if [ -n "${OUT_IFACE}" ]; then
+    echo "[$(date +%H:%M:%S)] Enabling IP forwarding and NAT for ${DEV_CIDR_BLOCK} via ${OUT_IFACE}..." >&2
+    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
+    sudo iptables -t nat -C POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE >/dev/null 2>&1 || \
+      sudo iptables -t nat -A POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE
+    sudo iptables -C FORWARD -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT >/dev/null 2>&1 || \
+      sudo iptables -I FORWARD 1 -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT
+  else
+    echo "[$(date +%H:%M:%S)] WARNING: unable to determine default outbound interface for NAT." >&2
+  fi
+}
+
+CONFIGURE_HOST_NAT
 
 # ---- Step 3: Start DHCP server on the bridge ----
 START_DNSMASQ
