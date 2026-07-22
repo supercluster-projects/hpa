@@ -296,14 +296,27 @@ fi
 # ---- Step 2: Assign host IP and disable bridge-nf-call-iptables ----
 HOST_IP="$(cidr_host "${DEV_CIDR_BLOCK}" 1)"
 HOST_PREFIX="$(cidr_prefix "${DEV_CIDR_BLOCK}")"
+if ! ip link show "${BRIDGE}" 2>/dev/null; then
+  die "Bridge interface '${BRIDGE}' does not exist"
+fi
 if ! ip addr show "${BRIDGE}" 2>/dev/null | grep -q "inet .*${HOST_IP}/${HOST_PREFIX}"; then
   echo "[$(date +%H:%M:%S)] Assigning host IP ${HOST_IP}/${HOST_PREFIX} to ${BRIDGE}..." >&2
   if command -v sudo &>/dev/null && sudo -n true &>/dev/null; then
-    sudo ip addr add "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
+    sudo ip addr replace "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
   elif [ -n "${ROOT_PASSWORD:-}" ]; then
-    echo "${ROOT_PASSWORD}" | sudo -S ip addr add "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
+    echo "${ROOT_PASSWORD}" | sudo -S ip addr replace "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
   else
     die "Cannot add host IP ${HOST_IP}/${HOST_PREFIX} to ${BRIDGE}; set ROOT_PASSWORD or run with sudo-capable privileges"
+  fi
+fi
+if ! ip link show "${BRIDGE}" 2>/dev/null | grep -q '<.*UP>'; then
+  echo "[$(date +%H:%M:%S)] Bringing ${BRIDGE} interface up..." >&2
+  if command -v sudo &>/dev/null && sudo -n true &>/dev/null; then
+    sudo ip link set "${BRIDGE}" up
+  elif [ -n "${ROOT_PASSWORD:-}" ]; then
+    echo "${ROOT_PASSWORD}" | sudo -S ip link set "${BRIDGE}" up
+  else
+    die "Cannot bring ${BRIDGE} interface up; set ROOT_PASSWORD or run with sudo-capable privileges"
   fi
 fi
 if ! ip link show "${HOST_IFACE}" &>/dev/null; then
@@ -362,6 +375,9 @@ if ! virsh -c qemu:///system net-dumpxml "${BRIDGE}" | grep -q "<bridge name='${
 fi
 if ! ip addr show "${BRIDGE}" 2>/dev/null | grep -q "inet .*${HOST_IP}/${HOST_PREFIX}"; then
   die "Bridge '${BRIDGE}' does not have IP ${HOST_IP}/${HOST_PREFIX}"
+fi
+if ! ip link show "${BRIDGE}" 2>/dev/null | grep -q '<.*UP>'; then
+  die "Bridge '${BRIDGE}' is not up"
 fi
 if [ "${DEV_DHCP_ENABLED}" = "true" ] && ! pgrep -f "dnsmasq.*hpa-bridge" >/dev/null; then
   die "dnsmasq is not running for '${BRIDGE}'"
