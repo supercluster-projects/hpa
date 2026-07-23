@@ -113,11 +113,11 @@ done
 print_resource_table() {
   local rows=("$@")
   log "  Resource removal summary:"
-  log "  TYPE                         NAME                                           STATUS"
-  log "  ---------------------------  -----------------------------------------------  -------"
+  log "  STATUS                         TYPE                         NAME                                           "
+  log "  -------                        ---------------------------  ----------------------------------------------- "
   for row in "${rows[@]}"; do
     IFS=$'\t' read -r type name status <<< "${row}"
-    printf '  %-25s  %-47s  %s\n' "${type}" "${name}" "${status}"
+    printf '  %-25s  %-25s  %-47s\n' "${status}" "${type}" "${name}"
   done
 }
 
