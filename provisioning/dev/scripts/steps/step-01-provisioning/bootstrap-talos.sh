@@ -12,6 +12,8 @@ main() {
   # Get Talos endpoint
   PRIMARY_CP_IP="${PRIMARY_CP_IP:-192.168.122.100}"
   
+  BOOTSTRAP_ENDPOINT="insecure://${PRIMARY_CP_IP}"
+  
   # Set talosconfig path
   export TALOSCONFIG="${DEV_TOFU_DIR:-${SCRIPT_DIR}/../opentofu}/talosconfig"
   
@@ -22,13 +24,13 @@ main() {
   fi
   
   # Set endpoint using insecure scheme (Method 1)
-  log_step "Setting Talos endpoint to insecure://${PRIMARY_CP_IP}"
-  talosctl --talosconfig "${TALOSCONFIG}" config endpoint "insecure://${PRIMARY_CP_IP}" 2>/dev/null || true
-  talosctl --talosconfig "${TALOSCONFIG}" config node "${PRIMARY_CP_IP}" 2>/dev/null || true
+  log_step "Setting Talos endpoint to ${BOOTSTRAP_ENDPOINT}"
+  talosctl --talosconfig "${TALOSCONFIG}" config endpoint "${BOOTSTRAP_ENDPOINT}"
+  talosctl --talosconfig "${TALOSCONFIG}" config node "${PRIMARY_CP_IP}"
   
   # Bootstrap using insecure scheme (Method 1)
-  log_step "Running talosctl bootstrap (insecure://${PRIMARY_CP_IP})..."
-  if timeout 120 talosctl --talosconfig "${TALOSCONFIG}" bootstrap -n "${PRIMARY_CP_IP}" 2>&1 | tee -a "${STARTUP_LOG}"; then
+  log_step "Running talosctl bootstrap (${BOOTSTRAP_ENDPOINT})..."
+  if timeout 120 talosctl --talosconfig "${TALOSCONFIG}" bootstrap --nodes "${PRIMARY_CP_IP}" --endpoints "${BOOTSTRAP_ENDPOINT}" 2>&1 | tee -a "${STARTUP_LOG}"; then
     log_step "Bootstrap completed successfully"
   else
     log_step "WARNING: Bootstrap returned non-zero, continuing..."
