@@ -127,6 +127,37 @@ print_bootstrap_status_table() {
   fi
 }
 
+all_nodes_ready() {
+  local expected
+  local ready_count=0
+  local total_count=0
+  local kubeconfig_ready=false
+
+  expected=$(( ${DEV_CP_COUNT:-1} + ${DEV_WORKER_COUNT:-3} ))
+
+  if [ -f "${KUBECONFIG}" ] && kubectl --kubeconfig "${KUBECONFIG}" get nodes >/dev/null 2>&1; then
+    ready_count="$(kubectl --kubeconfig "${KUBECONFIG}" get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+      | awk '{total += 1; if ($2 == "True") ready += 1} END {printf "%d", ready + 0}')"
+    total_count="$(kubectl --kubeconfig "${KUBECONFIG}" get nodes --no-headers 2>/dev/null | wc -l | tr -d ' ')"
+    kubeconfig_ready=true
+  fi
+
+  if [ "${kubeconfig_ready}" = true ]; then
+    [ "${total_count}" -ge "${expected}" ] && [ "${ready_count}" -ge "${expected}" ]
+    return $?
+  fi
+
+  # Fallback: use Talos machine status if kubeconfig is not available yet.
+  if command -v talosctl >/dev/null 2>&1 && [ -n "${TALOSCONFIG:-}" ]; then
+    ready_count="$(get_talos_machine_json | jq -r '[.items[]? | select((.status.conditions[]? | select(.type == "Ready" and .status == "True")))] | length' 2>/dev/null || true)"
+    total_count="$(get_talos_machine_json | jq -r '.items | length' 2>/dev/null || true)"
+  fi
+
+  ready_count="${ready_count:-0}"
+  total_count="${total_count:-0}"
+  [ "${total_count}" -ge "${expected}" ] && [ "${ready_count}" -ge "${expected}" ]
+}
+
 main() {
   echo ">>> Bootstrapping Talos cluster (Method 1: insecure)..." >&3
   
@@ -151,39 +182,29 @@ main() {
   
   # Bootstrap using insecure scheme (Method 1)
   log_step "Running talosctl bootstrap (${BOOTSTRAP_ENDPOINT})..."
-  if timeout 120 talosctl --talosconfig "${TALOSCONFIG}" bootstrap --nodes "${PRIMARY_CP_IP}" --endpoints "${BOOTSTRAP_ENDPOINT}" 2>&1 | tee -a "${STARTUP_LOG}"; then
-    log_step "Bootstrap completed successfully"
+  if talosctl --talosconfig "${TALOSCONFIG}" bootstrap --nodes "${PRIMARY_CP_IP}" --endpoints "${BOOTSTRAP_ENDPOINT}" 2>&1 | tee -a "${STARTUP_LOG}"; then
+    log_step "Bootstrap command returned successfully"
   else
-    log_step "WARNING: Bootstrap returned non-zero, continuing..."
+    log_step "WARNING: Bootstrap command returned non-zero, continuing to readiness polling"
   fi
   
-  # Wait for API endpoint to be available
-  log_step "Waiting for Talos API to be available..."
-  API_READY=false
-  for i in {1..30}; do
-    if timeout 5 curl -sk "https://${PRIMARY_CP_IP}:6443/healthz" 2>/dev/null | grep -q "ok"; then
-      API_READY=true
-      print_bootstrap_status_table "API available"
-      break
+  # Ensure kubeconfig exists before polling Kubernetes readiness
+  log_step "Extracting kubeconfig for readiness polling..."
+  if [ -f "${TALOSCONFIG:-}" ]; then
+    if talosctl --talosconfig "${TALOSCONFIG}" kubeconfig . 2>/dev/null; then
+      [ -f ./kubeconfig ] && cp ./kubeconfig "${KUBECONFIG}"
+      log_step "Kubeconfig updated via talosctl"
     fi
-    print_bootstrap_status_table "Waiting for API... (${i}/30)"
-    sleep 5
+  fi
+  
+  log_step "Waiting for all Talos/Kubernetes nodes to be Ready..."
+  while ! all_nodes_ready; do
+    print_bootstrap_status_table "Waiting for all nodes Ready"
+    sleep 15
   done
   
-  if [ "$API_READY" = true ]; then
-    log_step "Talos API is available"
-    
-    # Extract kubeconfig after successful bootstrap
-    log_step "Extracting kubeconfig after bootstrap..."
-    if [ -f "${TALOSCONFIG:-}" ]; then
-      if talosctl --talosconfig "${TALOSCONFIG}" kubeconfig . 2>/dev/null; then
-        [ -f ./kubeconfig ] && cp ./kubeconfig "${KUBECONFIG}"
-        log_step "Kubeconfig updated via talosctl"
-      fi
-    fi
-  else
-    log_step "WARNING: Talos API not available after bootstrap timeout"
-  fi
+  print_bootstrap_status_table "All nodes Ready"
+  log_step "All Talos/Kubernetes nodes are Ready"
   
   echo ">>> Talos bootstrap complete" >&3
 }
