@@ -110,37 +110,64 @@ for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.talos_base" || t
   tofu state rm "${key}" 2>/dev/null || true
 done
 
+print_resource_table() {
+  local rows=("$@")
+  log "  Resource removal summary:"
+  log "  TYPE                         NAME                                           STATUS"
+  log "  ---------------------------  -----------------------------------------------  -------"
+  for row in "${rows[@]}"; do
+    IFS=$'\t' read -r type name status <<< "${row}"
+    printf '  %-25s  %-47s  %s\n' "${type}" "${name}" "${status}"
+  done
+}
+
+remove_tofu_resource() {
+  local type="$1"
+  local key="$2"
+  local status="removed"
+
+  tofu state rm "${key}" >/dev/null 2>&1 || status="not found"
+  printf '%s\t%s\t%s\n' "${type}" "${key}" "${status}"
+}
+
 # ---- Step 5: Remove stale libvirt resources from tofu state ---------------
 log "Step 5: Removing stale libvirt resources from tofu state..."
 cd "${TOFU_ABS_DIR}"
 
+local removal_rows=()
+local key
+local row
+local res_type
+
 # Always remove VM domains - they need to be created fresh
 for key in $(tofu state list 2>/dev/null | grep "libvirt_domain.node" || true); do
-  log "  Removing from state: ${key}"
-  tofu state rm "${key}" 2>/dev/null || true
+  row="$(remove_tofu_resource "libvirt_domain.node" "${key}")" || true
+  removal_rows+=("${row}")
 done
 
 # OS disks: always remove from state (per-node volumes)
 for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.os_disk" || true); do
-  log "  Removing from state: ${key}"
-  tofu state rm "${key}" 2>/dev/null || true
+  row="$(remove_tofu_resource "libvirt_volume.os_disk" "${key}")" || true
+  removal_rows+=("${row}")
 done
 
 # ISO state: only remove if being re-downloaded (version changed)
 if [ "${SKIP_ISO:-false}" = false ]; then
   for key in $(tofu state list 2>/dev/null | grep "libvirt_volume.talos_iso" || true); do
-    log "  Removing from state: ${key}"
-    tofu state rm "${key}" 2>/dev/null || true
+    row="$(remove_tofu_resource "libvirt_volume.talos_iso" "${key}")" || true
+    removal_rows+=("${row}")
   done
 fi
 
 # Also remove bootstrap/apply resources that depend on fresh VMs
 for res_type in talos_machine_configuration_apply talos_machine_bootstrap talos_cluster_kubeconfig; do
   for key in $(tofu state list 2>/dev/null | grep "${res_type}" || true); do
-    log "  Removing from state: ${key}"
-    tofu state rm "${key}" 2>/dev/null || true
+    row="$(remove_tofu_resource "${res_type}" "${key}")" || true
+    removal_rows+=("${row}")
   done
 done
+
+print_resource_table "${removal_rows[@]}"
 
 # ---- Step 6: Verify Ceph disks are preserved -----------------------------
 log "Step 6: Verifying Ceph disks are preserved..."
