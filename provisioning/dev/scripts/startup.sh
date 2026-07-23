@@ -154,8 +154,10 @@ prompt_step() {
 
       if [ "${read_status}" -eq 124 ]; then
         if [ "$result" = "SUCCESS" ] || [ "$result" = "SKIPPED" ]; then
-          echo "No input received within ${timeout}s; defaulting to Execute next step." >&3
-          return 0
+          echo "No input received within ${timeout}s; waiting for explicit confirmation."
+          echo "Set PROMPT_TIMEOUT_SECONDS=0 for an unbounded prompt."
+          echo "Timeouts do not auto-advance the pipeline."
+          continue
         fi
         echo "No input received within ${timeout}s; defaulting to Quit." >&3
         die "Step ${step_num} failed, user requested quit"
@@ -167,8 +169,9 @@ prompt_step() {
         [Rr])  show_results_table; attempt=0; continue ;;
         [Qq])  die "User requested quit" ;;
         "")    if [ "$result" = "SUCCESS" ] || [ "$result" = "SKIPPED" ]; then
-          echo "Empty choice; defaulting to Execute next step." >&3
-          return 0
+          echo "Empty choice; no progress made. Choose E, S, R, or Q." >&3
+          attempt=0
+          continue
         fi
         echo "Empty choice; defaulting to Quit." >&3
         die "Step ${step_num} failed, user requested quit" ;;
