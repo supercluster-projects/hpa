@@ -62,7 +62,7 @@ main() {
   
   # Run OpenTofu apply
   log_step "Running tofu apply -auto-approve..."
-  (cd "${TFDIR}" && tofu apply -auto-approve 2>&1 | sed '/^libvirt_volume.talos_base will be created$/,$d' | tee -a "${PROJECT_ROOT}/.tofu-apply.log") &
+  (cd "${TFDIR}" && tofu apply -auto-approve 2>>"${PROJECT_ROOT}/.tofu-apply.log") &
   TOFU_PID=$!
   
   # Monitor progress
@@ -75,7 +75,7 @@ main() {
   
   wait ${TOFU_PID}
   TOFU_EXIT=$?
-  log_step "OpenTofu apply completed (verbose talos_base config block filtered)"
+  log_step "OpenTofu apply completed"
   
   if [ ${TOFU_EXIT} -ne 0 ]; then
     echo "ERROR: tofu apply failed (exit ${TOFU_EXIT})" >&2
