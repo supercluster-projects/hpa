@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
     --tofu-dir) TOFU_DIR="$2";  shift 2 ;;
     --preserve-ceph) PRESERVE_CEPH="true"; shift ;;
     --reset-ceph)   PRESERVE_CEPH="false"; shift ;;
-    *)         echo "[$(date +%H:%M:%S)] ERROR: Unknown argument: $1" >&2; exit 1 ;;
+    *)         echo "[$(date '+%H:%M:%S')] ERROR: Unknown argument: $1" >&2; exit 1 ;;
   esac
 done
 
@@ -41,90 +41,125 @@ FAILURES=0
 # Resolve TOFU_DIR to an absolute path relative to the script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 TOFU_ABS_DIR="$(cd "${SCRIPT_DIR}/${TOFU_DIR}" &> /dev/null && pwd || echo "${SCRIPT_DIR}/${TOFU_DIR}")"
+CURRENT_TS="$(date '+%H:%M:%S')"
 
 cleanup_fail() {
   local msg="$1"
-  echo "[$(date +%H:%M:%S)] FAIL: ${msg}" >&2
+  echo "[$CURRENT_TS] FAIL: ${msg}" >&2
   FAILURES=$((FAILURES + 1))
 }
 
-echo "[$(date +%H:%M:%S)] Starting cleanup for node prefix '${NODE_PREFIX}' on bridge '${BRIDGE}'..." >&2
+print_cleanup_banner() {
+  echo -e "\r\033[K[$CURRENT_TS] Starting cleanup for node prefix '${NODE_PREFIX}' on bridge '${BRIDGE}'..." >&2
+  printf "  %-24s %-32s %-12s\n" "STAGE" "TARGET" "STATUS" >&2
+  printf "  %-24s %-32s %-12s\n" "-----" "------" "------" >&2
+}
+
+update_cleanup_status() {
+  local stage="$1"
+  local target="$2"
+  local status="$3"
+
+  echo -e "\r\033[K[$CURRENT_TS] Starting cleanup for node prefix '${NODE_PREFIX}' on bridge '${BRIDGE}'..." >&2
+  printf "  %-24s %-32s %-12s\n" "${stage}" "${target}" "${status}" >&2
+}
+
+print_summary_table() {
+  echo "========================================" >&2
+  echo "  Cleanup Summary" >&2
+  echo "========================================" >&2
+  printf "  %-24s %-32s %-12s\n" "ITEM" "VALUE" "STATUS" >&2
+  printf "  %-24s %-32s %-12s\n" "----" "-----" "------" >&2
+  printf "  %-24s %-32s %-12s\n" "VMs destroyed/undefined" "${DESTROYED_VMS}" "OK" >&2
+  printf "  %-24s %-32s %-12s\n" "Volumes deleted" "${DESTROYED_VOLS}" "OK" >&2
+  printf "  %-24s %-32s %-12s\n" "Networks removed" "${DESTROYED_NETS}" "OK" >&2
+  printf "  %-24s %-32s %-12s\n" "Config files cleaned" "${CLEANED_FILES}" "OK" >&2
+  printf "  %-24s %-32s %-12s\n" "Failures" "${FAILURES}" "${FAILURES:-0}" >&2
+  echo "========================================" >&2
+}
+
+print_cleanup_banner
 
 # ---- Step 1: Destroy and undefine all Talos VMs ---------------------------
-echo "[$(date +%H:%M:%S)] Looking for libvirt domains matching '${NODE_PREFIX}'..." >&2
+update_cleanup_status "VM discovery" "${VM_NAMES:-none}" "scanning"
 VM_NAMES=$(virsh -c qemu:///system list --name --all 2>/dev/null | grep -E "^${NODE_PREFIX}-(cp|worker)-" || true)
-
 if [[ -z "${VM_NAMES}" ]]; then
-  echo "[$(date +%H:%M:%S)] No VMs found matching prefix '${NODE_PREFIX}'." >&2
+  update_cleanup_status "VM cleanup" "none" "not found"
 else
   while IFS= read -r vm; do
     [[ -z "${vm}" ]] && continue
-    echo "[$(date +%H:%M:%S)] Destroying VM '${vm}'..." >&2
+    update_cleanup_status "VM destroy" "${vm}" "running"
     if virsh -c qemu:///system destroy "${vm}" > /dev/null 2>&1; then
-      echo "[$(date +%H:%M:%S)]   Destroyed: ${vm}" >&2
+      update_cleanup_status "VM undefine" "${vm}" "destroyed"
     else
       cleanup_fail "virsh -c qemu:///system destroy '${vm}' (may already be stopped)"
+      update_cleanup_status "VM destroy" "${vm}" "failed"
+      continue
     fi
 
-    echo "[$(date +%H:%M:%S)] Undefining VM '${vm}' (with --nvram)..." >&2
+    update_cleanup_status "VM undefine" "${vm}" "undefining"
     if virsh -c qemu:///system undefine --nvram "${vm}" > /dev/null 2>&1; then
-      echo "[$(date +%H:%M:%S)]   Undefined: ${vm}" >&2
+      update_cleanup_status "VM undefine" "${vm}" "undefined"
       DESTROYED_VMS=$((DESTROYED_VMS + 1))
     else
       cleanup_fail "virsh -c qemu:///system undefine --nvram '${vm}'"
+      update_cleanup_status "VM undefine" "${vm}" "failed"
     fi
   done <<< "${VM_NAMES}"
 fi
 
 # ---- Step 2: Remove libvirt volumes matching node OS and Ceph disks -------
-echo "[$(date +%H:%M:%S)] Looking for libvirt volumes matching '${NODE_PREFIX}'..." >&2
+update_cleanup_status "Volume discovery" "${VOL_NAMES:-none}" "scanning"
 VOL_NAMES=$(virsh -c qemu:///system vol-list default 2>/dev/null | awk -v prefix="${NODE_PREFIX}-" '$1 ~ prefix {print $1}' || true)
-
 if [[ -z "${VOL_NAMES}" ]]; then
-  echo "[$(date +%H:%M:%S)] No volumes found matching prefix '${NODE_PREFIX}'." >&2
+  update_cleanup_status "Volume cleanup" "none" "not found"
 else
   while IFS= read -r vol; do
     [[ -z "${vol}" ]] && continue
-    echo "[$(date +%H:%M:%S)] Deleting volume '${vol}'..." >&2
+    update_cleanup_status "Volume delete" "${vol}" "deleting"
     if virsh -c qemu:///system vol-delete --pool default "${vol}" > /dev/null 2>&1; then
-      echo "[$(date +%H:%M:%S)]   Deleted: ${vol}" >&2
+      update_cleanup_status "Volume delete" "${vol}" "deleted"
       DESTROYED_VOLS=$((DESTROYED_VOLS + 1))
     else
       cleanup_fail "virsh -c qemu:///system vol-delete '${vol}'"
+      update_cleanup_status "Volume delete" "${vol}" "failed"
     fi
   done <<< "${VOL_NAMES}"
 fi
 
 # Ceph disk handling - preserve by default for idempotent cluster recreation
-echo "[$(date +%H:%M:%S)] Ceph disk handling (PRESERVE_CEPH=${PRESERVE_CEPH})..." >&2
 if [ "${PRESERVE_CEPH}" = "false" ]; then
-  echo "[$(date +%H:%M:%S)] Clearing Ceph disk images..." >&2
+  update_cleanup_status "Ceph disks" "clear" "deleting"
   if sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
-    echo "[$(date +%H:%M:%S)]   Wiped and cleared: /var/lib/libvirt/images/ceph-disks/*.img" >&2
+    update_cleanup_status "Ceph disks" "clear" "cleared"
   else
     cleanup_fail "sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
+    update_cleanup_status "Ceph disks" "clear" "failed"
   fi
 else
-  echo "[$(date +%H:%M:%S)]   Preserving Ceph disk images..." >&2
+  update_cleanup_status "Ceph disks" "preserve" "preserved"
 fi
 
 # ---- Step 3: Destroy and undefine the hpa-bridge network ------------------
 if virsh -c qemu:///system net-info "${BRIDGE}" > /dev/null 2>&1; then
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' exists. Destroying..." >&2
+  update_cleanup_status "Bridge cleanup" "${BRIDGE}" "destroying"
   if virsh -c qemu:///system net-destroy "${BRIDGE}" > /dev/null 2>&1; then
-    echo "[$(date +%H:%M:%S)]   Network destroyed: ${BRIDGE}" >&2
+    update_cleanup_status "Bridge cleanup" "${BRIDGE}" "destroyed"
   else
     cleanup_fail "virsh -c qemu:///system net-destroy '${BRIDGE}'"
+    update_cleanup_status "Bridge cleanup" "${BRIDGE}" "failed"
   fi
 
+  update_cleanup_status "Bridge cleanup" "${BRIDGE}" "undefining"
   if virsh -c qemu:///system net-undefine "${BRIDGE}" > /dev/null 2>&1; then
-    echo "[$(date +%H:%M:%S)]   Network undefined: ${BRIDGE}" >&2
+    update_cleanup_status "Bridge cleanup" "${BRIDGE}" "undefined"
     DESTROYED_NETS=$((DESTROYED_NETS + 1))
   else
     cleanup_fail "virsh -c qemu:///system net-undefine '${BRIDGE}'"
+    update_cleanup_status "Bridge cleanup" "${BRIDGE}" "failed"
   fi
 else
-  echo "[$(date +%H:%M:%S)] Network '${BRIDGE}' does not exist. Skipping." >&2
+  update_cleanup_status "Bridge cleanup" "${BRIDGE}" "skipped"
 fi
 
 # ---- Step 4: Remove kubeconfig and talosconfig if present -----------------
@@ -132,30 +167,28 @@ if [[ -d "${TOFU_ABS_DIR}" ]]; then
   for f in kubeconfig talosconfig; do
     fpath="${TOFU_ABS_DIR}/${f}"
     if [[ -f "${fpath}" ]]; then
-      rm -f "${fpath}"
-      echo "[$(date +%H:%M:%S)]   Removed: ${fpath}" >&2
-      CLEANED_FILES=$((CLEANED_FILES + 1))
+      update_cleanup_status "Config cleanup" "${f}" "removing"
+      if rm -f "${fpath}"; then
+        update_cleanup_status "Config cleanup" "${f}" "removed"
+        CLEANED_FILES=$((CLEANED_FILES + 1))
+      else
+        cleanup_fail "rm -f '${fpath}'"
+        update_cleanup_status "Config cleanup" "${f}" "failed"
+      fi
+    else
+      update_cleanup_status "Config cleanup" "${f}" "not found"
     fi
   done
 else
-  echo "[$(date +%H:%M:%S)] Tofu directory '${TOFU_DIR}' not found. Skipping config cleanup." >&2
+  update_cleanup_status "Config cleanup" "${TOFU_DIR}" "skipped"
 fi
 
-# ---- Summary --------------------------------------------------------------
-echo "========================================" >&2
-echo "  Cleanup Summary" >&2
-echo "========================================" >&2
-echo "  VMs destroyed/undefined:  ${DESTROYED_VMS}" >&2
-echo "  Volumes deleted:          ${DESTROYED_VOLS}" >&2
-echo "  Networks removed:         ${DESTROYED_NETS}" >&2
-echo "  Config files cleaned:     ${CLEANED_FILES}" >&2
-echo "  Failures:                 ${FAILURES}" >&2
-echo "========================================" >&2
+print_summary_table
 
 if [[ "${FAILURES}" -gt 0 ]]; then
-  echo "[$(date +%H:%M:%S)] Cleanup completed with ${FAILURES} failure(s)." >&2
+  update_cleanup_status "Cleanup" "failed" "${FAILURES} failure(s)"
   exit 1
 fi
 
-echo "[$(date +%H:%M:%S)] Cleanup completed successfully." >&2
+update_cleanup_status "Cleanup" "complete" "success"
 exit 0
