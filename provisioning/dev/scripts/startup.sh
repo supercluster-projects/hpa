@@ -128,8 +128,8 @@ prompt_step() {
         echo "     Bridge CIDR: ${DEV_CIDR_BLOCK:-192.168.122.0/24}" >&3
         ;;
     esac
-    if [ -n "${NODE_COUNT:-}" ]; then
-      echo "     Nodes ready: ${NODE_COUNT}" >&3
+    if [ -n "${NODE_SUMMARY:-}" ]; then
+      echo "     Nodes: ${NODE_SUMMARY}" >&3
     fi
     echo "" >&3
     echo "========================================" >&3
@@ -390,8 +390,9 @@ else
 fi
 
 # Verify nodes after provisioning
-NODE_COUNT=$(kubectl get nodes --no-headers 2>/dev/null | wc -l || echo "0")
-add_step_result 3 "Verify cluster nodes" "SUCCESS" "${NODE_COUNT} nodes ready"
+NODE_SUMMARY="$(get_ready_node_summary)"
+NODE_COUNT="${NODE_SUMMARY:-0/0 Ready}"
+add_step_result 3 "Verify cluster nodes" "SUCCESS" "${NODE_COUNT}"
 
 # Prompt for next step
 prompt_step 4 "Install Cilium CNI" "SUCCESS"
@@ -435,6 +436,7 @@ run_install_verify_step() {
 
   step_end "$result"
   add_step_result "$CURRENT_STEP_NUM" "$step_name" "$result" "install=${install_status}; verify=${verify_status}"
+  NODE_SUMMARY="$(get_ready_node_summary)"
 
   if [ "${step_num}" -lt 26 ]; then
     prompt_step "$((step_num + 1))" "$prompt_name" "$result"
@@ -482,6 +484,7 @@ run_seed_hydration_step() {
 
   step_end "$result"
   add_step_result "$CURRENT_STEP_NUM" "Seed hydration" "$result" "install=${install_status}"
+  NODE_SUMMARY="$(get_ready_node_summary)"
   prompt_step "$((step_num + 1))" "Seed hydration" "$result"
 }
 
@@ -645,6 +648,11 @@ get_lb_ingress() {
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
 
   printf '%s' "${ip:-${hostname}}"
+}
+
+get_ready_node_summary() {
+  kubectl --kubeconfig "${KUBECONFIG}" get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+    | awk '{total += 1; if ($2 == "True") ready += 1} END {printf "%d/%d Ready", ready, total + 0}' 2>/dev/null || true
 }
 
 print_url_component() {
