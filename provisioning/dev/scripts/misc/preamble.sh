@@ -55,6 +55,11 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Logging all output to ${STARTUP_LOG}"
 # ---- Log helpers ----------------------------------------------------------
 log()  { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >&2; }
 log_step() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" | tee -a "${STARTUP_LOG}" 2>/dev/null || true; }
+log_step_update() {
+  local ts
+  ts="$(date '+%Y-%m-%d %H:%M:%S')"
+  printf '\r\033[K[%s] %s\n' "${ts}" "$*" | tee -a "${STARTUP_LOG}" 2>/dev/null || true
+}
 err()  { log "ERROR: $*"; }
 die()  {
   local msg="$*"
@@ -105,7 +110,7 @@ trim_prompt_input() {
 }
 
 read_choice() {
-  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-0}"
   local prompt_text="$1"
   local choice=""
 
@@ -132,7 +137,7 @@ prompt_step() {
   local step_num=$1
   local step_name=$2
   local result=$3
-  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-0}"
   local max_invalid="${PROMPT_MAX_INVALID_ATTEMPTS:-3}"
   local attempt=0
   local choice=""

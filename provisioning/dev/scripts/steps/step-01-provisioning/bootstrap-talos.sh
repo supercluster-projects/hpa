@@ -42,7 +42,7 @@ main() {
       API_READY=true
       break
     fi
-    log_step "Waiting for API... ($i/30)"
+    log_step_update "Waiting for API... ($i/30)"
     sleep 5
   done
   
