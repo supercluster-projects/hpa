@@ -91,7 +91,7 @@ get_talos_services() {
 print_bootstrap_status_table() {
   local progress="${1:-}"
 
-  echo -e "\r\033[K" >&3
+  echo -e "\033[2J\033[H" >&3
   echo "  Talos bootstrap node progress${progress:+ (${progress})}:" >&3
   echo "  VM/Node                           VM state    Ready   Phase        Services" >&3
   echo "  --------------------------------  ----------  ------  -----------  --------------------------------------------" >&3
