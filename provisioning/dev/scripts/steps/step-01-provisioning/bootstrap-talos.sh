@@ -42,7 +42,7 @@ main() {
       API_READY=true
       break
     fi
-    log_step_update "Waiting for API... ($i/30)"
+    printf '\r\033[KWaiting for API... (%d/30)' "${i}"
     sleep 5
   done
   
