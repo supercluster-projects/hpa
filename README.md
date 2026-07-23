@@ -232,7 +232,7 @@ Choose (E Execute/S Skip/R Results/Q Quit):
 2. **Step 1** (OpenTofu provisioning) prompts before starting - it can take 30-60 minutes
 3. **Subsequent steps** prompt after each completion with results
 
-Prompts have a short timeout by default (`PROMPT_TIMEOUT_SECONDS=10`) and will default to Execute after timeout. Set `PROMPT_TIMEOUT_SECONDS=0` for an unbounded interactive prompt. Invalid choices are limited by `PROMPT_MAX_INVALID_ATTEMPTS` (default: 3).
+Prompts are unbounded by default (`PROMPT_TIMEOUT_SECONDS=0`) and require an explicit choice to advance. Set a positive value for a timed prompt. Invalid choices are limited by `PROMPT_MAX_INVALID_ATTEMPTS` (default: 3).
 
 **Results Table:**
 Press `R` at any prompt to view the step results summary:

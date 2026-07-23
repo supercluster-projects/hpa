@@ -71,7 +71,7 @@ trim_prompt_input() {
 }
 
 read_choice() {
-  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-0}"
   local prompt_text="$1"
   local choice=""
 
@@ -98,7 +98,7 @@ prompt_step() {
   local step_num=$1
   local step_name=$2
   local result=$3
-  local timeout="${PROMPT_TIMEOUT_SECONDS:-10}"
+  local timeout="${PROMPT_TIMEOUT_SECONDS:-0}"
   local max_invalid="${PROMPT_MAX_INVALID_ATTEMPTS:-3}"
   local attempt=0
   local choice=""
