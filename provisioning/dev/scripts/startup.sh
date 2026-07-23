@@ -62,6 +62,11 @@ show_results_table() {
   echo "========================================" >&3
 }
 
+get_ready_node_summary() {
+  kubectl --kubeconfig "${KUBECONFIG}" get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+    | awk '{total += 1; if ($2 == "True") ready += 1} END {printf "%d/%d Ready", ready, total + 0}' 2>/dev/null || true
+}
+
 # ---- Interactive prompt function ----
 trim_prompt_input() {
   local value="$1"
@@ -648,11 +653,6 @@ get_lb_ingress() {
     -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)
 
   printf '%s' "${ip:-${hostname}}"
-}
-
-get_ready_node_summary() {
-  kubectl --kubeconfig "${KUBECONFIG}" get nodes -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
-    | awk '{total += 1; if ($2 == "True") ready += 1} END {printf "%d/%d Ready", ready, total + 0}' 2>/dev/null || true
 }
 
 print_url_component() {
