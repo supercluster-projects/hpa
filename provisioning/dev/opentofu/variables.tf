@@ -128,6 +128,12 @@ variable "DEV_CIDR_BLOCK" {
   }
 }
 
+variable "OFFLINE_MODE" {
+  description = "Enable Talos containerd registry mirrors for offline/offline-first bootstrap"
+  type        = bool
+  default     = true
+}
+
 variable "local_image_path" {
   description = "Path to the cached Talos qcow2 image on the host"
   type        = string

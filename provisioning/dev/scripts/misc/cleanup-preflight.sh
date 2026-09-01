@@ -22,6 +22,38 @@ TOFU_DIR="${TOFU_DIR:-${SCRIPT_DIR}/../opentofu}"
 
 NODE_PREFIX="${NODE_PREFIX:-hpa-node}"
 
+ENV_FILE="${PROJECT_ROOT}/.env"
+if [ -f "${ENV_FILE}" ]; then
+  set -a; source "${ENV_FILE}"; set +a
+fi
+
+sudo_password() {
+  if [ -n "${SUDO_PASSWORD:-}" ]; then
+    return 0
+  fi
+  if [ "${SUDO_PASSWORD_PROMPTED:-0}" = "1" ]; then
+    die "SUDO_PASSWORD is not set and sudo password prompt was already shown"
+  fi
+  printf '\n' >&2
+  read -r -s -p "Enter sudo password: " SUDO_PASSWORD
+  printf '\n' >&2
+  SUDO_PASSWORD_PROMPTED=1
+  [ -n "${SUDO_PASSWORD:-}" ] || die "SUDO_PASSWORD is required for sudo operations. Set it in .env or enter it when prompted."
+}
+
+run_as_root() {
+  command -v sudo >/dev/null 2>&1 || die "sudo command not found"
+  if sudo -n true &>/dev/null; then
+    sudo "$@"
+    return $?
+  fi
+  sudo_password
+  if ! printf '%s\n' "${SUDO_PASSWORD}" | sudo -S "$@"; then
+    err "sudo command failed; check SUDO_PASSWORD or enter a valid password"
+    return 1
+  fi
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --prefix) NODE_PREFIX="$2"; shift 2 ;;
@@ -55,12 +87,12 @@ fi
 
 # ---- Step 2: Remove OS disk volumes (preserve Ceph disks) -----------------
 log "Step 2: Removing OS disk volumes (preserving Ceph disks)..."
-VOL_NAMES=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && ($1 ~ /-os\.qcow2$/ || $1 ~ /-os\.raw$/) {print $1}' || true)
+VOL_NAMES=$(run_as_root virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && ($1 ~ /-os\.qcow2$/ || $1 ~ /-os\.raw$/) {print $1}' || true)
 if [ -n "${VOL_NAMES}" ]; then
   while IFS= read -r vol; do
     [ -z "${vol}" ] && continue
     log "  Deleting OS volume: ${vol}"
-    sudo virsh vol-delete --pool default "${vol}" 2>/dev/null || true
+    run_as_root virsh vol-delete --pool default "${vol}" 2>/dev/null || true
   done <<< "${VOL_NAMES}"
   log "  OS volumes removed."
 else
@@ -69,13 +101,13 @@ fi
 
 # ---- Step 2b: Remove per-VM ISO clone volumes (recreated by startup.sh) ----
 log "Step 2b: Removing per-VM ISO clone volumes..."
-CLONE_VOLS=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '
+CLONE_VOLS=$(run_as_root virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '
   $1 ~ pre && $1 ~ /-install\.iso$/ && $1 !~ /^talos-install\.iso$/ {print $1}' || true)
 if [ -n "${CLONE_VOLS}" ]; then
   while IFS= read -r vol; do
     [ -z "${vol}" ] && continue
     log "  Deleting ISO clone: ${vol}"
-    sudo virsh vol-delete --pool default "${vol}" 2>/dev/null || true
+    run_as_root virsh vol-delete --pool default "${vol}" 2>/dev/null || true
   done <<< "${CLONE_VOLS}"
   log "  ISO clones removed."
 else
@@ -84,7 +116,7 @@ fi
 
 # ---- Step 3: Check Talos ISO volume (preserve if exists) ------------------
 log "Step 3: Checking Talos ISO volume..."
-ISO_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-install\.iso/ {print $1}' || true)
+ISO_VOL=$(run_as_root virsh vol-list default 2>/dev/null | awk '/talos-install\.iso/ {print $1}' || true)
 if [ -n "${ISO_VOL}" ]; then
   log "  Talos ISO volume '${ISO_VOL}' exists - preserving it"
   SKIP_ISO=true
@@ -98,10 +130,10 @@ fi
 # We remove any stale volume so tofu can recreate it fresh from the cache.
 # The cache file at ${PROJECT_ROOT}/.cache/talos-*.qcow2 is preserved.
 log "Step 4: Ensuring clean Talos base volume state..."
-BASE_VOL=$(sudo virsh vol-list default 2>/dev/null | awk '/talos-base\.qcow2/ {print $1}' || true)
+BASE_VOL=$(run_as_root virsh vol-list default 2>/dev/null | awk '/talos-base\.qcow2/ {print $1}' || true)
 if [ -n "${BASE_VOL}" ]; then
   log "  Removing stale talos-base volume (will be recreated from cache)..."
-  sudo virsh vol-delete --pool default "${BASE_VOL}" 2>/dev/null || true
+  run_as_root virsh vol-delete --pool default "${BASE_VOL}" 2>/dev/null || true
 fi
 
 # Remove from state if present (so tofu can manage it fresh)
@@ -134,10 +166,10 @@ remove_tofu_resource() {
 log "Step 5: Removing stale libvirt resources from tofu state..."
 cd "${TOFU_ABS_DIR}"
 
-local removal_rows=()
-local key
-local row
-local res_type
+removal_rows=()
+key=""
+row=""
+res_type=""
 
 # Always remove VM domains - they need to be created fresh
 for key in $(tofu state list 2>/dev/null | grep "libvirt_domain.node" || true); do
@@ -171,7 +203,7 @@ print_resource_table "${removal_rows[@]}"
 
 # ---- Step 6: Verify Ceph disks are preserved -----------------------------
 log "Step 6: Verifying Ceph disks are preserved..."
-CEPH_COUNT=$(sudo virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && $1 ~ /-ceph\.raw$/ {count++} END {print count+0}' || true)
+CEPH_COUNT=$(run_as_root virsh vol-list default 2>/dev/null | awk -v pre="${NODE_PREFIX}-" '$1 ~ pre && $1 ~ /-ceph\.raw$/ {count++} END {print count+0}' || true)
 log "  Ceph disks preserved: ${CEPH_COUNT}"
 
 log "=== Pre-flight cleanup complete. Ready for tofu apply. ==="

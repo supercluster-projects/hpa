@@ -39,27 +39,16 @@ machine:
         # CIDR block interpolated from Terraform locals
         - "${cidr_block}"
 
-  registries:
-    mirrors:
-      registry.k8s.io:
-        endpoints:
-          - http://${gateway}:5000
-      ghcr.io:
-        endpoints:
-          - http://${gateway}:5000
-      quay.io:
-        endpoints:
-          - http://${gateway}:5000
-      docker.io:
-        endpoints:
-          - http://${gateway}:5000
-
   files:
     - path: /etc/cri/conf.d/20-customization.part
       op: create
       content: |
         [plugins."io.containerd.grpc.v1.cri".containerd]
           discard_unpacked_layers = false
+
+  # Optional offline bootstrap image registry mirrors for Talos v1.13+.
+  # Keep this under machine:, not at the top level of the Talos config.
+${offline_registry_enabled ? "  registries:\n    mirrors:\n      registry.k8s.io:\n        endpoints:\n          - \"${offline_registry}\"\n      ghcr.io:\n        endpoints:\n          - \"${offline_registry}\"\n      quay.io:\n        endpoints:\n          - \"${offline_registry}\"\n      docker.io:\n        endpoints:\n          - \"${offline_registry}\"\n" : ""}
 
 cluster:
   # Completely prevent Talos from deploying its native kube-proxy

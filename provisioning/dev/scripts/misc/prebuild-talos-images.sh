@@ -111,7 +111,7 @@ echo ""
 LIBVIRT_POOL="/home/cores/.local/share/libvirt/images"
 if [ -d "${LIBVIRT_POOL}" ]; then
   log "Copying images to libvirt pool (${LIBVIRT_POOL})..."
-  sudo cp "${OUTPUT_DIR}"/*.qcow2 "${LIBVIRT_POOL}/" 2>/dev/null || cp "${OUTPUT_DIR}"/*.qcow2 "${LIBVIRT_POOL}/"
+  run_as_root cp "${OUTPUT_DIR}"/*.qcow2 "${LIBVIRT_POOL}/" 2>/dev/null || cp "${OUTPUT_DIR}"/*.qcow2 "${LIBVIRT_POOL}/"
   log "Images copied to libvirt pool"
 fi
 

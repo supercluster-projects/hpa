@@ -2,16 +2,12 @@
 # ---------------------------------------------------------------------------
 # setup-local-registry.sh — Set up local OCI registry for offline bootstrap
 #
-# Creates a local Docker registry on the host to serve images to the
-# Talos VMs during offline bootstrap. This is required for air-gapped
-# deployments where the cluster cannot pull images from the internet.
+# Starts a host-local registry at ${REGISTRY_HOST}:${REGISTRY_PORT} and seeds
+# the Talos/Kubernetes bootstrap images that Talos needs before Cilium is
+# installed. Talos machine config mirrors registry.k8s.io/ghcr.io/quay.io to
+# this host endpoint when OFFLINE_MODE=true.
 #
-# The script:
-# 1. Starts a local registry container (if not already running)
-# 2. Downloads bootstrap images (etcd, kube-apiserver, kubelet, etc.)
-# 3. Loads them into the local registry
-#
-# Usage: ./setup-local-registry.sh [--seed-dir <path>]
+# Usage: ./setup-local-registry.sh [--host <REGISTRY_HOST>]
 # ---------------------------------------------------------------------------
 set -euo pipefail
 
@@ -22,12 +18,139 @@ if [ -f "${ENV_FILE}" ]; then
 fi
 
 # ---- Configuration -----------------------------------------------------------
-REGISTRY_HOST="${DEV_BRIDGE_GATEWAY:-192.168.122.1}"
-REGISTRY_PORT=5000
+REGISTRY_HOST="${REGISTRY_HOST:-${DEV_BRIDGE_GATEWAY:-192.168.122.1}}"
+REGISTRY_PORT="${REGISTRY_PORT:-5000}"
 SEED_DIR="${SEED_DIR:-/media/seed-appliance}"
-REGISTRY_NAME="hpa-local-registry"
+REGISTRY_NAME="${REGISTRY_NAME:-hpa-local-registry}"
+REGISTRY_DATA_DIR="${REGISTRY_DATA_DIR:-${SCRIPT_DIR}/registry-data}"
 
-# ---- Bootstrap images required for Talos v1.13 + Kubernetes v1.36 -----------
+# ---- Helpers -----------------------------------------------------------------
+log() {
+  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+}
+
+die() {
+  log "ERROR: $1"
+  exit 1
+}
+
+sudo_password() {
+  if [ -n "${SUDO_PASSWORD:-}" ]; then
+    return 0
+  fi
+  if [ "${SUDO_PASSWORD_PROMPTED:-0}" = "1" ]; then
+    die "SUDO_PASSWORD is not set and sudo password prompt was already shown"
+  fi
+  printf '\n' >&3 2>/dev/null || true
+  read -r -s -p "Enter sudo password: " SUDO_PASSWORD
+  printf '\n' >&3 2>/dev/null || true
+  SUDO_PASSWORD_PROMPTED=1
+  [ -n "${SUDO_PASSWORD:-}" ] || die "SUDO_PASSWORD is required for sudo operations"
+}
+
+run_as_root() {
+  command -v sudo >/dev/null 2>&1 || die "sudo command not found"
+  if sudo -n true &>/dev/null; then
+    sudo "$@"
+    return $?
+  fi
+  sudo_password
+  printf '%s\n' "${SUDO_PASSWORD}" | sudo -S "$@"
+}
+
+# ---- Function to check if registry is running -------------------------------
+check_registry() {
+  if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null || true)" != "true" ]; then
+    return 1
+  fi
+  curl -fsS "http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/" 2>/dev/null | grep -q "{}"
+}
+
+# ---- Function to start registry --------------------------------------------
+start_registry() {
+  log "Starting local registry container '${REGISTRY_NAME}' at ${REGISTRY_HOST}:${REGISTRY_PORT}..."
+
+  docker rm -f "${REGISTRY_NAME}" 2>/dev/null || true
+  docker volume create "${REGISTRY_NAME}-data" >/dev/null 2>&1 || true
+  docker run -d \
+    --name "${REGISTRY_NAME}" \
+    --restart unless-stopped \
+    -p "${REGISTRY_PORT}:5000" \
+    -v "${REGISTRY_DATA_DIR}:/var/lib/registry:z" \
+    registry:2 >/dev/null
+
+  for _ in $(seq 1 60); do
+    if curl -fsS "http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/" 2>/dev/null | grep -q "{}"; then
+      log "Registry is ready"
+      break
+    fi
+    sleep 1
+  done
+
+  if ! curl -fsS "http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/" 2>/dev/null | grep -q "{}"; then
+    docker logs "${REGISTRY_NAME}" 2>/dev/null | tail -40 || true
+    die "Registry failed to become ready"
+  fi
+
+  if command -v firewall-cmd >/dev/null 2>&1; then
+    run_as_root firewall-cmd --zone=libvirt --add-port=5000/tcp --permanent >/dev/null 2>&1 || true
+    run_as_root firewall-cmd --reload >/dev/null 2>&1 || true
+  fi
+}
+
+# ---- Function to pull and push images --------------------------------------
+seed_image() {
+  local image="$1"
+  local img_name="${image#*/}"
+  local dest="docker://${REGISTRY_HOST}:${REGISTRY_PORT}/${img_name}"
+
+  log "Seeding ${image} into ${dest}..."
+
+  if command -v skopeo >/dev/null 2>&1; then
+    if skopeo copy \
+      --src-tls-verify=false \
+      --dest-tls-verify=false \
+      "docker://${image}" "${dest}" 2>&1 | tee /tmp/setup-local-registry-skopeo.log; then
+      log "  ✓ ${image} seeded via skopeo"
+      return 0
+    fi
+    log "  skopeo copy failed; trying docker pull/tag/push fallback"
+  fi
+
+  if command -v docker >/dev/null 2>&1; then
+    if docker pull --platform linux/amd64 "${image}" 2>&1 | tee /tmp/setup-local-registry-docker-pull.log; then
+      local local_tag="${image/registry.k8s.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+      local_tag="${local_tag/ghcr.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+      local_tag="${local_tag/quay.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+      local_tag="${local_tag/docker.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
+      docker tag "${image}" "${local_tag}" 2>&1 | tee /tmp/setup-local-registry-docker-tag.log
+      docker push "${local_tag}" 2>&1 | tee /tmp/setup-local-registry-docker-push.log
+      log "  ✓ ${image} seeded via docker fallback"
+      return 0
+    fi
+  fi
+
+  log "  WARNING: Could not seed ${image}; Talos bootstrap may fail if it is not already present on the node"
+  return 0
+}
+
+# ---- Main --------------------------------------------------------------------
+log "setup-local-registry: starting"
+log "  Registry host: ${REGISTRY_HOST}"
+log "  Registry port: ${REGISTRY_PORT}"
+log "  Seed dir: ${SEED_DIR}"
+
+command -v docker >/dev/null 2>&1 || die "docker command not found"
+command -v curl >/dev/null 2>&1 || die "curl command not found"
+
+mkdir -p "${REGISTRY_DATA_DIR}"
+
+if ! check_registry; then
+  start_registry
+else
+  log "Registry already running"
+fi
+
 BOOTSTRAP_IMAGES=(
   "registry.k8s.io/etcd:v3.6.12"
   "registry.k8s.io/kube-apiserver:v1.36.0"
@@ -41,95 +164,8 @@ BOOTSTRAP_IMAGES=(
   "registry.k8s.io/pause:3.9"
 )
 
-# ---- Function to check if registry is running -------------------------------
-check_registry() {
-  if docker exec "${REGISTRY_NAME}" 2>/dev/null; then
-    if curl -s "http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/" | grep -q "{}"; then
-      return 0
-    fi
-  fi
-  return 1
-}
-
-# ---- Function to start registry --------------------------------------------
-start_registry() {
-  log "Starting local registry at ${REGISTRY_HOST}:${REGISTRY_PORT}..."
-
-  # Remove existing registry if present
-  docker rm -f "${REGISTRY_NAME}" 2>/dev/null || true
-
-  # Start registry (:z suffix for SELinux relabeling)
-  docker run -d \
-    --name "${REGISTRY_NAME}" \
-    --restart unless-stopped \
-    -p "${REGISTRY_PORT}:5000" \
-    -v "${SCRIPT_DIR}/registry-data:/var/lib/registry:z" \
-    registry:2
-
-  # Wait for registry to be ready
-  for i in {1..30}; do
-    if curl -s "http://${REGISTRY_HOST}:${REGISTRY_PORT}/v2/" | grep -q "{}"; then
-      log "Registry is ready!"
-      return 0
-    fi
-    sleep 1
-  done
-
-  log "ERROR: Registry failed to start"
-  return 1
-}
-
-# ---- Function to pull and push images --------------------------------------
-sync_image() {
-  local image="$1"
-  local img_name="${image#*/}"
-  local img_name="${img_name//\//-}"
-
-  log "Syncing ${image}..."
-
-  # Use skopeo for multi-arch image support (docker push fails on multi-arch)
-  if command -v skopeo >/dev/null 2>&1; then
-    log "  Using skopeo (multi-arch safe)..."
-    skopeo copy --dest-tls-verify=false "docker://${image}" "docker://${REGISTRY_HOST}:${REGISTRY_PORT}/${image#*/}" 2>&1 && {
-      log "  ✓ ${image} seeded via skopeo"
-      return 0
-    }
-    log "  Warning: skopeo failed, trying docker pull/tag/push..."
-  fi
-
-  # Fallback: Pull from upstream, tag, push via docker
-  if docker pull "${image}" 2>/dev/null; then
-    local local_tag="${image/registry.k8s.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
-    local_tag="${local_tag/ghcr.io/${REGISTRY_HOST}:${REGISTRY_PORT}}"
-    docker tag "${image}" "${local_tag}"
-    docker push "${local_tag}" 2>/dev/null || log "Warning: Could not push ${local_tag}"
-  else
-    log "Warning: Could not pull ${image} - may already be in seed or offline"
-  fi
-}
-
-# ---- Main -------------------------------------------------------------------
-log() {
-  echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1"
-}
-
-log "setup-local-registry: starting"
-log "  Registry: ${REGISTRY_HOST}:${REGISTRY_PORT}"
-log "  Seed dir: ${SEED_DIR}"
-
-# Create registry data directory
-mkdir -p "${SCRIPT_DIR}/registry-data"
-
-# Start registry if not running
-if ! check_registry; then
-  start_registry || log "Warning: Could not start registry"
-else
-  log "Registry already running"
-fi
-
-# Sync bootstrap images
 for image in "${BOOTSTRAP_IMAGES[@]}"; do
-  sync_image "${image}"
+  seed_image "${image}"
 done
 
 log "Local registry should now have ${#BOOTSTRAP_IMAGES[@]} bootstrap images"

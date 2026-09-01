@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
 # setup-bridge.sh — Create libvirt bridge network for the HPA cluster
-# Supports both system libvirt (with ROOT_PASSWORD) and L2 mode
+# Supports both system libvirt (with SUDO_PASSWORD) and L2 mode
 # ---------------------------------------------------------------------------
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "${SCRIPT_DIR}/../../misc/preamble.sh"
@@ -42,16 +42,6 @@ echo "[$(date +%H:%M:%S)] Using host interface '${HOST_IFACE}' for bridge '${BRI
 # ---- XML helpers ----
 escape_xml() {
   printf '%s' "$1" | sed "s/'/'\&apos;/g"
-}
-
-run_as_root() {
-  if command -v sudo &>/dev/null && sudo -n true &>/dev/null; then
-    sudo "$@"
-  elif [ -n "${ROOT_PASSWORD:-}" ]; then
-    echo "${ROOT_PASSWORD}" | sudo -S "$@"
-  else
-    die "Cannot run as root; set ROOT_PASSWORD or run with sudo-capable privileges"
-  fi
 }
 
 cidr_prefix() {
@@ -240,15 +230,20 @@ START_DNSMASQ() {
     HOST_LINES="$(BUILD_DNSMASQ_HOSTS "${DEV_CIDR_BLOCK}" "${DEV_CP_COUNT}" "${DEV_WORKER_COUNT}")"
   fi
 
-  if [ -f "${DNSMASQ_PID}" ] && sudo kill -0 "$(cat "${DNSMASQ_PID}")" 2>/dev/null; then
+  if [ -f "${DNSMASQ_PID}" ] && run_as_root kill -0 "$(cat "${DNSMASQ_PID}")" 2>/dev/null; then
     echo "[$(date +%H:%M:%S)] Restarting dnsmasq on '${BRIDGE}'..." >&2
-    sudo kill "$(cat "${DNSMASQ_PID}")" 2>/dev/null || true
+    run_as_root kill "$(cat "${DNSMASQ_PID}")" 2>/dev/null || true
     sleep 1
   fi
 
+  run_as_root ip link set "${BRIDGE}" promisc on 2>/dev/null || true
+  run_as_root ip link set "${BRIDGE}" allmulticast on 2>/dev/null || true
   run_as_root mkdir -p "$(dirname "${DNSMASQ_LEASES}")"
-  sudo rm -f "${DNSMASQ_CONF}"
-  sudo tee "${DNSMASQ_CONF}" >/dev/null <<EOF_CONF
+  run_as_root chown dnsmasq:dnsmasq "${DNSMASQ_LEASES}" "${DNSMASQ_LOG}" 2>/dev/null || true
+  run_as_root touch "${DNSMASQ_LEASES}" "${DNSMASQ_LOG}" 2>/dev/null || true
+  run_as_root chmod 0660 "${DNSMASQ_LEASES}" "${DNSMASQ_LOG}" 2>/dev/null || true
+  run_as_root rm -f "${DNSMASQ_CONF}"
+  run_as_root tee "${DNSMASQ_CONF}" >/dev/null <<EOF_CONF
 interface=${BRIDGE}
 bind-interfaces
 except-interface=${HOST_IFACE}
@@ -259,6 +254,8 @@ pid-file=${DNSMASQ_PID}
 log-dhcp
 log-facility=${DNSMASQ_LOG}
 resolv-file=/run/systemd/resolve/resolv.conf
+dhcp-option=option:router,${HOST_IP}
+dhcp-option=option:dns-server,${HOST_IP}
 ${RANGE_ARGS}
 ${HOST_LINES}
 EOF_CONF
@@ -301,23 +298,11 @@ if ! ip link show "${BRIDGE}" 2>/dev/null; then
 fi
 if ! ip addr show "${BRIDGE}" 2>/dev/null | grep -q "inet .*${HOST_IP}/${HOST_PREFIX}"; then
   echo "[$(date +%H:%M:%S)] Assigning host IP ${HOST_IP}/${HOST_PREFIX} to ${BRIDGE}..." >&2
-  if command -v sudo &>/dev/null && sudo -n true &>/dev/null; then
-    sudo ip addr replace "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
-  elif [ -n "${ROOT_PASSWORD:-}" ]; then
-    echo "${ROOT_PASSWORD}" | sudo -S ip addr replace "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
-  else
-    die "Cannot add host IP ${HOST_IP}/${HOST_PREFIX} to ${BRIDGE}; set ROOT_PASSWORD or run with sudo-capable privileges"
-  fi
+  run_as_root ip addr replace "${HOST_IP}/${HOST_PREFIX}" dev "${BRIDGE}"
 fi
 if ! ip link show "${BRIDGE}" 2>/dev/null | grep -q '<.*UP>'; then
   echo "[$(date +%H:%M:%S)] Bringing ${BRIDGE} interface up..." >&2
-  if command -v sudo &>/dev/null && sudo -n true &>/dev/null; then
-    sudo ip link set "${BRIDGE}" up
-  elif [ -n "${ROOT_PASSWORD:-}" ]; then
-    echo "${ROOT_PASSWORD}" | sudo -S ip link set "${BRIDGE}" up
-  else
-    die "Cannot bring ${BRIDGE} interface up; set ROOT_PASSWORD or run with sudo-capable privileges"
-  fi
+  run_as_root ip link set "${BRIDGE}" up
 fi
 if ! ip link show "${HOST_IFACE}" &>/dev/null; then
   die "Host interface '${HOST_IFACE}' does not exist"
@@ -325,18 +310,14 @@ fi
 BRIDGE_NF_FILE="/proc/sys/net/bridge/bridge-nf-call-iptables"
 if [ -f "${BRIDGE_NF_FILE}" ] && [ "$(cat "${BRIDGE_NF_FILE}")" = "1" ]; then
   echo "[$(date +%H:%M:%S)] Disabling bridge-nf-call-iptables for VM-to-VM traffic..." >&2
-  if [ -n "${ROOT_PASSWORD:-}" ]; then
-    echo "${ROOT_PASSWORD}" | sudo -S sysctl -w net.bridge.bridge-nf-call-iptables=0 &>/dev/null
-    echo "${ROOT_PASSWORD}" | sudo -S sysctl -w net.bridge.bridge-nf-call-ip6tables=0 &>/dev/null
-    echo "${ROOT_PASSWORD}" | sudo -S sysctl -w net.bridge.bridge-nf-call-arptables=0 &>/dev/null
-    sudo tee /etc/sysctl.d/99-bridge-nf-call.conf > /dev/null <<'SYSEOF'
+  run_as_root sysctl -w net.bridge.bridge-nf-call-iptables=0 &>/dev/null || true
+  run_as_root sysctl -w net.bridge.bridge-nf-call-ip6tables=0 &>/dev/null || true
+  run_as_root sysctl -w net.bridge.bridge-nf-call-arptables=0 &>/dev/null || true
+  run_as_root tee /etc/sysctl.d/99-bridge-nf-call.conf > /dev/null <<'SYSEOF'
 net.bridge.bridge-nf-call-iptables = 0
 net.bridge.bridge-nf-call-ip6tables = 0
 net.bridge.bridge-nf-call-arptables = 0
 SYSEOF
-  else
-    echo "[$(date +%H:%M:%S)] WARNING: ROOT_PASSWORD not set, skipping sysctl changes" >&2
-  fi
 else
   echo "[$(date +%H:%M:%S)] bridge-nf-call-iptables already disabled." >&2
 fi
@@ -347,19 +328,36 @@ CONFIGURE_HOST_NAT() {
 
   if [ -n "${OUT_IFACE}" ]; then
     echo "[$(date +%H:%M:%S)] Enabling IP forwarding and NAT for ${DEV_CIDR_BLOCK} via ${OUT_IFACE}..." >&2
-    sudo sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
-    sudo iptables -t nat -C POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE >/dev/null 2>&1 || \
-      sudo iptables -t nat -A POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE
-    sudo iptables -C FORWARD -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT >/dev/null 2>&1 || \
-      sudo iptables -I FORWARD 1 -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT
+    run_as_root sysctl -w net.ipv4.ip_forward=1 >/dev/null || true
+    if ! run_as_root iptables -w -t nat -C POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE >/dev/null 2>&1; then
+      run_as_root iptables -w -t nat -A POSTROUTING -s "${DEV_CIDR_BLOCK}" -o "${OUT_IFACE}" -j MASQUERADE || {
+        echo "[$(date +%H:%M:%S)] ERROR: failed to add NAT MASQUERADE rule for ${DEV_CIDR_BLOCK} via ${OUT_IFACE}" >&2
+        return 1
+      }
+    fi
+    if ! run_as_root iptables -w -C FORWARD -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT >/dev/null 2>&1; then
+      run_as_root iptables -w -I FORWARD 1 -i "${BRIDGE}" -o "${OUT_IFACE}" -j ACCEPT || {
+        echo "[$(date +%H:%M:%S)] ERROR: failed to add FORWARD ACCEPT rule for ${BRIDGE} via ${OUT_IFACE}" >&2
+        return 1
+      }
+    fi
   else
     echo "[$(date +%H:%M:%S)] WARNING: unable to determine default outbound interface for NAT." >&2
   fi
 }
 
+# ---- Step 3: Start DHCP server on the bridge ----
+if command -v firewall-cmd >/dev/null 2>&1; then
+  echo "[$(date +%H:%M:%S)] Adding '${BRIDGE}' to the libvirt firewall zone..." >&2
+  firewall-cmd --zone=libvirt --change-interface="${BRIDGE}" >/dev/null 2>&1 || true
+  firewall-cmd --zone=libvirt --change-interface="${BRIDGE}" --permanent >/dev/null 2>&1 || true
+  firewall-cmd --zone=libvirt --add-source="${DEV_CIDR_BLOCK}" >/dev/null 2>&1 || true
+  firewall-cmd --zone=libvirt --add-source="${DEV_CIDR_BLOCK}" --permanent >/dev/null 2>&1 || true
+  firewall-cmd --reload >/dev/null 2>&1 || true
+fi
+
 CONFIGURE_HOST_NAT
 
-# ---- Step 3: Start DHCP server on the bridge ----
 START_DNSMASQ
 
 # ---- Step 4: Verify ----

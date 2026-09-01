@@ -135,6 +135,11 @@ prompt_step() {
     esac
     if [ -n "${NODE_SUMMARY:-}" ]; then
       echo "     Nodes: ${NODE_SUMMARY}" >&3
+      ready_count="${NODE_SUMMARY%%/*}"
+      total_count="${NODE_SUMMARY##*/}"
+      if [ "${ready_count}" -lt "${total_count}" ]; then
+        echo "     Note: not all nodes are Ready yet; this is expected before Cilium CNI completes." >&3
+      fi
     fi
     echo "" >&3
     echo "========================================" >&3
@@ -377,9 +382,9 @@ else
     step_end "DONE"
     add_step_result $CURRENT_STEP_NUM "Provision Talos VMs" "SUCCESS"
   else
-    log_step "WARNING: Provision script returned non-zero, continuing..."
-    step_end "DONE"
-    add_step_result $CURRENT_STEP_NUM "Provision Talos VMs" "SUCCESS"
+    step_end "FAILED" "OpenTofu/Talos provisioning failed"
+    add_step_result $CURRENT_STEP_NUM "Provision Talos VMs" "FAILED"
+    die "install-provision.sh failed"
   fi
   
   # Bootstrap Talos cluster
@@ -388,9 +393,9 @@ else
     step_end "DONE"
     add_step_result $CURRENT_STEP_NUM "Bootstrap Talos" "SUCCESS"
   else
-    log_step "WARNING: Bootstrap script returned non-zero, continuing..."
-    step_end "DONE"
-    add_step_result $CURRENT_STEP_NUM "Bootstrap Talos" "SUCCESS"
+    step_end "FAILED" "Talos bootstrap failed"
+    add_step_result $CURRENT_STEP_NUM "Bootstrap Talos" "FAILED"
+    die "bootstrap-talos.sh failed"
   fi
 fi
 

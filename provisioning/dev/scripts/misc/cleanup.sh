@@ -40,6 +40,40 @@ FAILURES=0
 
 # Resolve TOFU_DIR to an absolute path relative to the script location
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+ENV_FILE="${PROJECT_ROOT}/.env"
+if [ -f "${ENV_FILE}" ]; then
+  set -a; source "${ENV_FILE}"; set +a
+fi
+
+sudo_password() {
+  if [ -n "${SUDO_PASSWORD:-}" ]; then
+    return 0
+  fi
+  if [ "${SUDO_PASSWORD_PROMPTED:-0}" = "1" ]; then
+    cleanup_fail "SUDO_PASSWORD is not set and sudo password prompt was already shown"
+    return 1
+  fi
+  printf '\n' >&2
+  read -r -s -p "Enter sudo password: " SUDO_PASSWORD
+  printf '\n' >&2
+  SUDO_PASSWORD_PROMPTED=1
+  [ -n "${SUDO_PASSWORD:-}" ] || { cleanup_fail "SUDO_PASSWORD is required for sudo operations"; return 1; }
+}
+
+run_as_root() {
+  command -v sudo >/dev/null 2>&1 || { cleanup_fail "sudo command not found"; return 1; }
+  if sudo -n true &>/dev/null; then
+    sudo "$@"
+    return $?
+  fi
+  sudo_password || return 1
+  if ! printf '%s\n' "${SUDO_PASSWORD}" | sudo -S "$@"; then
+    cleanup_fail "sudo command failed; check SUDO_PASSWORD or enter a valid password"
+    return 1
+  fi
+}
+
 TOFU_ABS_DIR="$(cd "${SCRIPT_DIR}/${TOFU_DIR}" &> /dev/null && pwd || echo "${SCRIPT_DIR}/${TOFU_DIR}")"
 CURRENT_TS="$(date '+%H:%M:%S')"
 
@@ -130,10 +164,10 @@ fi
 # Ceph disk handling - preserve by default for idempotent cluster recreation
 if [ "${PRESERVE_CEPH}" = "false" ]; then
   update_cleanup_status "Ceph disks" "clear" "deleting"
-  if sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
+  if run_as_root rm -rf /var/lib/libvirt/images/ceph-disks/*.img; then
     update_cleanup_status "Ceph disks" "clear" "cleared"
   else
-    cleanup_fail "sudo rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
+    cleanup_fail "rm -rf /var/lib/libvirt/images/ceph-disks/*.img"
     update_cleanup_status "Ceph disks" "clear" "failed"
   fi
 else

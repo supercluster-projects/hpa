@@ -36,10 +36,12 @@ data "talos_machine_configuration" "controlplane" {
 
   config_patches = [
     templatefile("${path.module}/cluster-config.yaml.tftpl", {
-      gateway           = local.gateway
-      cidr_block        = local.cidr_block
-      cp_node_names     = join(",", local.cp_node_names)
-      worker_node_names = join(",", local.worker_node_names)
+      gateway                  = local.gateway
+      cidr_block               = local.cidr_block
+      cp_node_names            = join(",", local.cp_node_names)
+      worker_node_names        = join(",", local.worker_node_names)
+      offline_registry_enabled = local.offline_registry_enabled
+      offline_registry         = local.offline_registry
     }),
   ]
 }
@@ -53,10 +55,12 @@ data "talos_machine_configuration" "worker" {
 
   config_patches = [
     templatefile("${path.module}/cluster-config.yaml.tftpl", {
-      gateway           = local.gateway
-      cidr_block        = local.cidr_block
-      cp_node_names     = join(",", local.cp_node_names)
-      worker_node_names = join(",", local.worker_node_names)
+      gateway                  = local.gateway
+      cidr_block               = local.cidr_block
+      cp_node_names            = join(",", local.cp_node_names)
+      worker_node_names        = join(",", local.worker_node_names)
+      offline_registry_enabled = local.offline_registry_enabled
+      offline_registry         = local.offline_registry
     }),
   ]
 }

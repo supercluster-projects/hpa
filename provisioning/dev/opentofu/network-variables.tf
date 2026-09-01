@@ -33,6 +33,12 @@ locals {
   all_ips = concat(local.cp_ips, local.worker_ips)
 
   # ---------------------------------------------------------------------------
+  # Offline bootstrap registry
+  # ---------------------------------------------------------------------------
+  offline_registry_enabled = var.OFFLINE_MODE
+  offline_registry         = var.OFFLINE_MODE ? "http://${local.gateway}:5000" : ""
+
+  # ---------------------------------------------------------------------------
   # LoadBalancer IP Pool
   # ---------------------------------------------------------------------------
 

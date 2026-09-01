@@ -133,6 +133,38 @@ read_choice() {
   printf '%s' "$choice"
 }
 
+sudo_password() {
+  if [ -n "${SUDO_PASSWORD:-}" ]; then
+    return 0
+  fi
+
+  if [ "${SUDO_PASSWORD_PROMPTED:-0}" = "1" ]; then
+    die "SUDO_PASSWORD is not set and sudo password prompt was already shown"
+  fi
+
+  printf '\n' >&3
+  read -r -s -p "Enter sudo password: " SUDO_PASSWORD
+  printf '\n' >&3
+  SUDO_PASSWORD_PROMPTED=1
+
+  [ -n "${SUDO_PASSWORD:-}" ] || die "SUDO_PASSWORD is required for sudo operations. Set it in .env or enter it when prompted."
+}
+
+run_as_root() {
+  command -v sudo >/dev/null 2>&1 || die "sudo command not found"
+
+  if sudo -n true &>/dev/null; then
+    sudo "$@"
+    return $?
+  fi
+
+  sudo_password
+  if ! printf '%s\n' "${SUDO_PASSWORD}" | sudo -S "$@"; then
+    err "sudo command failed; check SUDO_PASSWORD or enter a valid password"
+    return 1
+  fi
+}
+
 prompt_step() {
   local step_num=$1
   local step_name=$2

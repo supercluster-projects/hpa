@@ -70,7 +70,7 @@ while true; do
   fi
 
   # ---- Signal A: Disk growth -------------------------------------------
-  disk_info=$(sudo qemu-img info --force-share "${OS_DISK}" 2>/dev/null) || disk_info=""
+  disk_info=$(run_as_root qemu-img info --force-share "${OS_DISK}" 2>/dev/null) || disk_info=""
   disk_size=$(echo "${disk_info}" | sed -n 's/disk size: //p')
   disk_size_bytes=$(echo "${disk_info}" | grep "disk size" | grep -oP '\d+(?= bytes)' | head -1)
   virt_size_bytes=$(echo "${disk_info}" | grep "virtual size" | grep -oP '\d+(?= bytes)' | head -1)
